@@ -266,3 +266,33 @@ h2.titulo { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; c
 .giro { width: 28px; height: 28px; border-radius: 50%; border: 3px solid var(--linea); border-top-color: var(--verde-2); animation: girar .8s linear infinite; }
 @keyframes girar { to { transform: rotate(360deg); } }
 .fila-acciones { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+
+/* ---------- menú semanal ---------- */
+.nav { grid-template-columns: repeat(5, 1fr); }
+.nav a { font-size: 11px; }
+.menu-cab .monto { margin-top: 6px; }
+.dia { display: flex; align-items: center; gap: 12px; padding: 12px 8px 12px 14px; border-bottom: 1px solid var(--linea); }
+.dia:last-child { border-bottom: 0; }
+.dia .info { flex: 1; min-width: 0; background: none; border: 0; text-align: left; padding: 0; }
+.dia .cuando { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--verde-2); }
+.dia .nombre { font-weight: 650; font-size: 16px; margin: 1px 0; }
+.dia.hecho .check { background: var(--verde-2); border-color: var(--verde-2); }
+.dia.hecho .check::after { content: ""; width: 10px; height: 6px; border: solid var(--tarjeta); border-width: 0 0 2.5px 2.5px; transform: translateY(-1px) rotate(-45deg); }
+.dia.hecho .nombre { text-decoration: line-through; color: var(--tinta-3); }
+.dia .cambiar { font-size: 20px; color: var(--verde-2); }
+.tag { font-size: 11.5px; font-weight: 700; padding: 1px 7px; border-radius: 6px; background: var(--verde-suave); color: var(--verde-2); }
+.compra { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-bottom: 1px solid var(--linea); }
+.compra:last-child { border-bottom: 0; }
+.compra .info { flex: 1; min-width: 0; }
+.compra .n { font-weight: 600; font-size: 15px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.paso h4 { margin: 18px 0 8px; font-size: 15px; }
+.paso h4:first-child { margin-top: 0; }
+.tarjeta.paso { padding: 16px; }
+.intro h2 { font-size: 24px; letter-spacing: -0.02em; margin: 10px 0 4px; color: var(--verde); }
+.intro p { margin: 0 0 14px; color: var(--tinta-2); }
+.receta h4 { margin: 6px 0 8px; font-size: 15px; }
+.receta ul, .receta ol { margin: 0 0 16px; padding-left: 20px; }
+.receta li { margin-bottom: 6px; }
+.receta li.tengo { color: var(--tinta-3); }
+.receta li.tengo::after { content: " · ya tienes"; font-size: 12px; }

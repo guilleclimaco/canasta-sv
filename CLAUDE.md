@@ -1,7 +1,7 @@
 # CLAUDE.md — Canasta SV
 
-Objetivo: dejar funcionando la app Canasta (lista del súper + presupuesto + comparador de precios
-de supermercados de El Salvador) con **costo $0**, accesible desde el iPhone de Guille y el Android
+Objetivo: dejar funcionando la app Canasta (lista del súper + menú semanal de almuerzos + presupuesto +
+comparador de precios de supermercados de El Salvador) con **costo $0**, accesible desde el iPhone de Guille y el Android
 de su tía desde cualquier lugar.
 
 ## Qué hacer
@@ -18,6 +18,8 @@ de su tía desde cualquier lugar.
 - Antes de cambiar código corre `node --test tests/*.test.mjs`; si tocas `web/`, sube `VERSION` en `web/sw.js`.
 - Selectos (`scraper/selectos.mjs`) está **sin verificar** contra la página real: usa `--descubrir` y ajusta.
 - Pide a Guille solo lo que no puedas hacer (crear cuentas, iniciar sesión en el navegador, pegar llaves).
+
+- Si el proyecto ya estaba instalado y llegó una actualización, sigue `ACTUALIZAR-MENU.md`.
 
 ## Comandos útiles
 ```powershell

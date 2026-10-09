@@ -1,6 +1,6 @@
 # 🧺 Canasta SV
 
-App para el celular (iPhone y Android) que junta la **lista del súper**, el **presupuesto del mes** y un **comparador de precios** de supermercados de El Salvador. Te dice si conviene comprar todo en un solo lugar o dividir la compra entre dos tiendas, y solo te manda a la segunda si el ahorro vale la vuelta.
+App para el celular (iPhone y Android) que junta la **lista del súper**, el **menú de almuerzos de la semana**, el **presupuesto del mes** y un **comparador de precios** de supermercados de El Salvador. Te arma qué cocinar con lo más barato de la semana, te pasa los ingredientes a la lista Te dice si conviene comprar todo en un solo lugar o dividir la compra entre dos tiendas, y solo te manda a la segunda si el ahorro vale la vuelta.
 
 **Costo mensual: $0.** Todo corre en planes gratuitos.
 
@@ -16,6 +16,7 @@ App para el celular (iPhone y Android) que junta la **lista del súper**, el **p
 
 | Pantalla | Para qué |
 |---|---|
+| **Menú** | Estilo NeatEat: le dices cuántos comen, qué días cocinas, tu presupuesto, gustos, aparatos y lo que ya tienes en casa, y arma los almuerzos de la semana con 28 recetas salvadoreñas y cotidianas, usando los precios reales de hoy. Puedes cambiar cualquier día, ver la receta con cantidades y pasos, y mandar los ingredientes a la lista con un toque. Sin IA de pago: $0. |
 | **Lista** | Escribes "arroz 2", eliges el producto exacto y ves en qué tienda sale más barato. La lista se comparte en vivo entre los dos celulares. |
 | **Dónde comprar** | Arma el plan más barato: una sola tienda, o dos si te ahorras más de lo que tú definas (por defecto $3). Te dice qué comprar en cada lugar. |
 | **Ofertas** | Productos con precio por debajo de su precio normal o de su máximo de los últimos 60 días. Filtro "De mi lista". |
@@ -72,10 +73,14 @@ canasta-sv/
 │  ├─ index.html, estilos.css, app.js
 │  ├─ datos.js                  Supabase real + modo demo
 │  ├─ optimizador.js            Decide dónde comprar (lógica pura, con pruebas)
+│  ├─ menu/recetas.js           28 almuerzos (cantidades para 4, pasos, aparatos, etiquetas)
+│  ├─ menu/ingredientes.js      Ingredientes: cómo buscarlos en tiendas + precio de referencia
+│  ├─ menu/planificador.js      Arma la semana: costo, variedad, presupuesto, despensa
 │  ├─ config.js                 URL + llave PÚBLICA de Supabase  ← se edita en el paso 5
 │  └─ manifest.webmanifest, sw.js, icons/
 ├─ supabase/
 │  ├─ migrations/…_canasta.sql  Tablas, seguridad (RLS), funciones y vista de ofertas
+│  ├─ migrations/…_menu.sql     Menú semanal compartido + precios por ingrediente
 │  ├─ functions/precios/        Edge Function "Buscar ahora" (Deno)
 │  ├─ functions/_shared/vtex.mjs  Lector de precios VTEX (lo comparten la función y el robot)
 │  └─ config.toml
@@ -122,7 +127,12 @@ node --test tests/*.test.mjs          # deben pasar todas
 node scraper/probar.mjs "arroz omoa"
 node scraper/probar.mjs leche
 ```
-Debe listar productos con precio en Walmart, Maxi y Don Juan. Si una tienda da error 403/404, revisa en el navegador que `https://<tienda>/api/catalog_system/pub/products/search?ft=arroz` siga respondiendo JSON y ajusta `TIENDAS_VTEX` en `supabase/functions/_shared/vtex.mjs`.
+Debe listar productos con precio en Walmart, Maxi y Don Juan. Revisa también productos a granel, que usa el menú:
+```powershell
+node scraper/probar.mjs tomate
+node scraper/probar.mjs "pechuga pollo"
+```
+Para que el costo del menú salga bien, cada producto debe traer su tamaño (`contenido` en g, ml o und). Si los productos por libra salen sin tamaño o con un precio raro, revisa qué traen `measurementUnit` y `unitMultiplier` en la respuesta JSON y ajusta `contenidoPorMedida()` en `vtex.mjs`. Si una tienda da error 403/404, revisa en el navegador que `https://<tienda>/api/catalog_system/pub/products/search?ft=arroz` siga respondiendo JSON y ajusta `TIENDAS_VTEX` en `supabase/functions/_shared/vtex.mjs`.
 
 ### Paso 2 · Crear el proyecto de Supabase
 
@@ -243,6 +253,8 @@ Cada quien entra con su correo, que debe estar en `miembros`, y escribe el códi
 - [ ] Agregar "leche" → elegir producto → aparece el precio en varias tiendas.
 - [ ] "Buscar en tiendas" dentro del selector trae productos nuevos (Edge Function).
 - [ ] "Dónde comprar" muestra una recomendación.
+- [ ] **Menú**: llenar preferencias → "Armar mi semana" → aparecen los almuerzos con costo; ↻ cambia un día; "Agregar a mi lista" pasa los ingredientes.
+- [ ] Después de la corrida diaria, en Menú desaparece "Algunos precios son estimados" para la mayoría de ingredientes (o se reduce).
 - [ ] Registrar un gasto actualiza la barra del mes.
 - [ ] En el segundo celular la lista cambia sola al marcar algo en el primero (tiempo real).
 - [ ] Selectos: verificado y corriendo en GitHub **o** en la tarea de Windows.
@@ -256,8 +268,18 @@ Cada quien entra con su correo, que debe estar en `miembros`, y escribe el códi
 - **Agregar otra tienda VTEX** (por ejemplo PriceSmart, si usa VTEX): agrégala en `TIENDAS_VTEX` y en la tabla `tiendas`.
 - **Uso responsable**: una consulta al día, con pausas, para uso personal. No subas la frecuencia.
 
+## Cómo arma el menú (sin IA, $0)
+
+1. Para cada ingrediente del recetario busca en la base los productos reales (`candidatos_ingredientes`), descarta los que no son el ingrediente (ej. "sopa sabor pollo") y usa el más barato por gramo, ml o unidad. Si todavía no hay precio real, usa un precio de referencia y lo marca como *estimado*.
+2. Elige una receta por día: la que menos cuesta comprar, con bonos por tu estilo, por reaprovechar ingredientes que ya se compran esa semana y por ingredientes en oferta. Penaliza repetir receta o la misma proteína seguida, y le da un toque de azar para que "Generar otro menú" cambie.
+3. Si se pasa del presupuesto, cambia los días más caros por recetas más baratas.
+4. La lista de compras suma lo de toda la semana, quita lo que ya tienes y redondea a paquetes reales, eligiendo la presentación que sale más barata en total.
+
+Para agregar recetas, edita `web/menu/recetas.js`. Si usas un ingrediente nuevo, agrégalo en `ingredientes.js` y su término en una migración nueva de `terminos`. Corre las pruebas: verifican que cada receta use ingredientes existentes.
+
 ## Ideas para después (no incluidas)
 
-- **Menú semanal estilo NeatEat**: con el presupuesto, lo que ya hay en casa y las ofertas de la semana, generar recetas y su lista de compras. Requiere un modelo de IA (por ejemplo una Edge Function que llame a la API de Claude con un modelo pequeño). Cuesta centavos por menú, pero **ya no es $0**.
+- **Recetas con IA**: además del recetario, pedirle a un modelo ideas nuevas con lo que hay en oferta. Requiere una Edge Function que llame a la API de Claude con un modelo pequeño; cuesta centavos por menú, pero **ya no es $0**.
+- Desayunos y cenas, además de almuerzos.
 - Escanear el ticket con la cámara para registrar el gasto automáticamente.
 - Alerta (notificación push) cuando algo de tu lista baja de precio.

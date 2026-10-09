@@ -28,21 +28,58 @@ const UNIDADES = {
 
 /**
  * Saca el contenido del nombre: "Arroz 1816gr" -> {contenido:1816, unidad:'g'}
- * "Leche 6 Pack - 1200 ml" -> 7200 ml. Si no encuentra nada -> und.
+ * "Leche 6 Pack - 1200 ml" -> 1200 ml (total); "Coca Cola 6 x 355 ml" -> 2130 ml; "Huevos 30 unidades" -> 30 und;
+ * "Tomate por libra" -> 453.59 g; "Limón persa unidad" -> 1 und.
+ * Si no encuentra nada -> {null, null}.
  */
 export function parsearContenido(nombre) {
-  const n = normalizar(nombre).replace(/(\d),(\d)/g, '$1.$2');
+  let n = normalizar(nombre).replace(/(\d),(\d)/g, '$1.$2');
+  // Walmart/Maxi/Don Juan: "Tomate - 2 a 4 Unidades, precio Indicado Por Libra (454 g)" → el precio es por libra.
+  // Solo cuenta un tamaño fijo de bolsa ("Red 5 Libras"), no "de 10 libras aproximadamente".
+  if (/precio\s+(?:indicado\s+)?por\s+(?:libra|lb)\b/.test(n)) {
+    const bolsa = n.replace(/precio.*$/, '').match(/\b(\d+(?:\.\d+)?)\s*(?:libras|lbs|lb)\b(?!\s*aprox)/);
+    return { contenido: bolsa ? Math.round(parseFloat(bolsa[1]) * 453.59 * 100) / 100 : 453.59, unidad: 'g' };
+  }
+  // "3 a 5 Unidades Aproximadamente" y "(1 Lb= 454 g)" son descripciones, no el tamaño
+  n = n.replace(/\b\d+\s*(?:a|-)\s*\d+\s*(?:unidades|unidad|und|uds|u)\b(?:\s*aproximadamente)?/g, ' ')
+    .replace(/\(?\s*1\s*lb\s*=\s*454\s*g\s*\)?/g, ' ');
+  // "Huevo 15U 735 g A 825 g": rango de peso → cuenta por unidades
+  const rango = /\b\d+(?:\.\d+)?\s*(?:g|gr|grs|kg|oz|onz)?\s*(?:a|-)\s*\d+(?:\.\d+)?\s*(?:g|gr|grs|gramos|kg|oz|onz|onzas)\b/;
+  const conRango = rango.test(n);
+  if (conRango) n = n.replace(rango, ' ');
   const re = /(\d+(?:\.\d+)?)\s*(kilogramos|kilogramo|kilos|kilo|kg|gramos|gramo|grs|gr|g|libras|libra|lbs|lb|onzas|onz|oz|mililitros|ml|cc|litros|litro|lts|lt|l)(?![a-z])/;
   const m = n.match(re);
   let pack = 1;
-  const p = n.match(/(\d+)\s*(?:pack|pk|unidades|unid|und|uds|u)\b/) || n.match(/\b(?:pack|paquete)\s*(?:de\s*)?(\d+)\b/) || n.match(/\b(\d+)\s*x\s*\d/);
+  const p = n.match(/(\d+)\s*(?:pack|pk|unidades|unidad|unid|und|uds|u|piezas|pzas|rollos|huevos|tortillas|panes|bolsas|sobres)\b/)
+    || n.match(/\b(?:pack|paquete)\s*(?:de\s*)?(\d+)\b/) || n.match(/\b(\d+)\s*x\s*\d/);
   if (p) pack = parseInt(p[1], 10) || 1;
-  if (!m) return { contenido: pack > 1 ? pack : null, unidad: pack > 1 ? 'und' : null };
+  if (conRango && pack > 1) return { contenido: pack, unidad: 'und' };
+  if (!m) {
+    if (pack > 1) return { contenido: pack, unidad: 'und' };
+    // productos a granel: "Tomate por libra", "Papa lb", "Pollo entero kg"
+    const granel = n.match(/(?:^|\s)(?:por\s+|x\s+|el\s+|la\s+)?(libra|lb|lbs|kilo|kg)(?:\s|$)/);
+    if (granel) return { contenido: ['kilo', 'kg'].includes(granel[1]) ? 1000 : 453.59, unidad: 'g' };
+    if (/(?:^|\s)(?:por\s+)?(?:unidad|und|c\/u)(?:\s|$)/.test(n) || /(?:^|\s)(?:manojo|cabeza)(?:\s|$)/.test(n)) return { contenido: 1, unidad: 'und' };
+    return { contenido: null, unidad: null };
+  }
   const [unidad, factor] = UNIDADES[m[2]];
   let contenido = parseFloat(m[1]) * factor;
-  // "6 x 355 ml" o "6 pack - 1200 ml": si el pack viene ANTES de la medida, multiplicar
-  if (pack > 1 && p && p.index < m.index) contenido *= pack;
+  // "6 x 355 ml": la medida es de cada unidad → multiplicar.
+  // "2 Pack - 4540 g" / "30 uds -1900 g": en estas tiendas la medida ya es el total.
+  if (pack > 1 && p && p.index < m.index && /^\d+\s*x/.test(p[0])) contenido *= pack;
   return { contenido: Math.round(contenido * 100) / 100, unidad };
+}
+
+/**
+ * VTEX vende a granel con measurementUnit ("kg", "lb", "g") y unitMultiplier (cuánto trae una "unidad" de venta).
+ * Solo se usa si el nombre no dice el tamaño. ⚠ Verificar con productos reales (README, paso 1).
+ */
+export function contenidoPorMedida(item) {
+  const mu = String(item?.measurementUnit || '').toLowerCase();
+  const mult = Number(item?.unitMultiplier) || 1;
+  const f = { kg: ['g', 1000], g: ['g', 1], lb: ['g', 453.59], l: ['ml', 1000], ml: ['ml', 1] }[mu];
+  if (!f) return null;
+  return { contenido: Math.round(mult * f[1] * 100) / 100, unidad: f[0] };
 }
 
 /** Convierte un producto VTEX en filas (una por SKU) para registrar_precios */
@@ -56,7 +93,8 @@ export function parsearProducto(tiendaId, base, p) {
     if (!precio || precio <= 0) continue; // VTEX pone 0 cuando no hay existencias
     const lista = Number(o.ListPrice) || Number(o.PriceWithoutDiscount) || precio;
     const nombre = item.nameComplete || item.name || p.productName;
-    const { contenido, unidad } = parsearContenido(nombre);
+    let { contenido, unidad } = parsearContenido(nombre);
+    if (!contenido) ({ contenido, unidad } = contenidoPorMedida(item) || { contenido, unidad });
     let url = p.link || (p.linkText ? `${base}/${p.linkText}/p` : null);
     if (url && url.startsWith('/')) url = base + url;
     filas.push({

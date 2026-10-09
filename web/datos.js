@@ -134,6 +134,23 @@ async function crearReal() {
         .subscribe();
       return () => sb.removeChannel(canal);
     },
+    // ---- menú semanal ----
+    async candidatosIngredientes(terminos) {
+      return ok(await sb.rpc('candidatos_ingredientes', { terminos, por_termino: 15 })).map(num);
+    },
+    async menu(semana) {
+      return ok(await sb.from('menus').select('*').eq('semana', semana).maybeSingle())?.datos ?? null;
+    },
+    async guardarMenu(semana, datos) {
+      ok(await sb.from('menus').upsert({ semana, datos, actualizado: new Date().toISOString() }));
+    },
+    escucharMenu(cb) {
+      const canal = sb
+        .channel('menu-compartido')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'menus' }, cb)
+        .subscribe();
+      return () => sb.removeChannel(canal);
+    },
   };
 }
 
@@ -204,6 +221,7 @@ function crearDemo() {
     { id: 3, fecha: dia(8), tienda: 'selectos', categoria: 'Limpieza', monto: 9.8, nota: '' },
   ];
   let ajustes = { umbral_segunda_tienda: 3, tiendas_cercanas: tiendas.map((t) => t.id) };
+  const menus = {};
   let idItem = 100;
   let idGasto = 100;
   const espera = (ms = 120) => new Promise((r) => setTimeout(r, ms));
@@ -255,5 +273,17 @@ function crearDemo() {
     async agregarGasto(g) { gastos.push({ id: idGasto++, fecha: new Date().toISOString().slice(0, 10), ...g }); },
     async borrarGasto(id) { gastos = gastos.filter((g) => g.id !== id); },
     escucharLista() { return () => {}; },
+    async candidatosIngredientes(terminos) {
+      await espera();
+      return terminos.flatMap((t) => {
+        const ws = t.split(' ');
+        return productos
+          .filter((p) => p.contenido && ws.every((w) => p.busqueda.includes(w)))
+          .map((p) => ({ ...p, termino: t }));
+      });
+    },
+    async menu(semana) { return menus[semana] ?? null; },
+    async guardarMenu(semana, datos) { menus[semana] = datos; },
+    escucharMenu() { return () => {}; },
   };
 }

@@ -1,5 +1,8 @@
 import { crearDatos, normalizar } from './datos.js';
 import { optimizar, precioUnitario, round2 } from './optimizador.js';
+import { INGREDIENTES, DESPENSA_COMUN, EVITABLES, terminosDeIngredientes } from './menu/ingredientes.js';
+import { RECETAS } from './menu/recetas.js';
+import { DIAS, PERFIL_INICIAL, planificar, preciosIngredientes, cantidadTexto, ingredienteEnReceta, porcionesDe } from './menu/planificador.js';
 
 // ---------------------------------------------------------------- utilidades
 const $ = (s, el = document) => el.querySelector(s);
@@ -33,11 +36,13 @@ const ICONOS = {
   comparar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>',
   ofertas: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.5" fill="currentColor"/></svg>',
   gastos: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="M3 10h18M7 15h3"/></svg>',
+  menu: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="13" r="6.5"/><path d="M3 4v6a2 2 0 0 0 2 2M5 4v16M21 4c-1.5 1-2 3-2 6h2v10"/></svg>',
   ajustes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>',
 };
 const PESTANAS = [
   ['lista', 'Lista'],
-  ['comparar', 'Dónde comprar'],
+  ['menu', 'Menú'],
+  ['comparar', 'Comprar'],
   ['ofertas', 'Ofertas'],
   ['gastos', 'Gastos'],
 ];
@@ -82,6 +87,12 @@ async function iniciar() {
       debounce(async () => {
         await cargarLista();
         if (estado.tab === 'lista' || estado.tab === 'comparar') render();
+      }, 400),
+    );
+    D.escucharMenu(
+      debounce(() => {
+        estado.menuCargado = false;
+        if (estado.tab === 'menu') render();
       }, 400),
     );
   } catch (e) {
@@ -202,7 +213,7 @@ function irA(tab) {
 function render() {
   const v = $('#vista');
   if (!v) return;
-  ({ lista: vistaLista, comparar: vistaComparar, ofertas: vistaOfertas, gastos: vistaGastos })[estado.tab](v);
+  ({ lista: vistaLista, menu: vistaMenu, comparar: vistaComparar, ofertas: vistaOfertas, gastos: vistaGastos })[estado.tab](v);
 }
 
 // ---------------------------------------------------------------- LISTA
@@ -438,6 +449,271 @@ function hojaElegir(item) {
     } catch (e) { errorAviso(e); }
   };
   buscar(item.nombre);
+}
+
+// ---------------------------------------------------------------- MENÚ (almuerzos de la semana)
+const ESTILOS = [['economico', 'Económico'], ['rapido', 'Rápido'], ['tradicional', 'Típico'], ['saludable', 'Saludable'], ['ninos', 'Para niños'], ['vegetariano', 'Vegetariano']];
+const APARATOS = [['horno', 'Horno'], ['freidora', 'Freidora de aire'], ['licuadora', 'Licuadora']];
+const recetaPorId = new Map(RECETAS.map((r) => [r.id, r]));
+
+function lunesDe(fecha) {
+  const d = new Date(fecha);
+  const dia = (d.getDay() + 6) % 7; // 0 = lunes
+  // sábado y domingo: se planifica la semana que viene
+  d.setDate(d.getDate() - dia + (dia >= 5 ? 7 : 0));
+  return d.toLocaleDateString('en-CA');
+}
+const fechaCorta = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString('es-SV', { day: 'numeric', month: 'short' });
+
+async function cargarMenu() {
+  if (estado.menuCargado) return;
+  const semana = lunesDe(new Date());
+  const [cands, guardado] = await Promise.all([D.candidatosIngredientes(terminosDeIngredientes()), D.menu(semana)]);
+  estado.menu = {
+    semana,
+    perfil: { ...PERFIL_INICIAL, ...(estado.ajustes.perfil_menu || {}) },
+    tienePerfil: !!estado.ajustes.perfil_menu,
+    despensa: new Set(estado.ajustes.despensa || []),
+    precios: preciosIngredientes(cands, tiendasActivas()),
+    guardado,
+  };
+  estado.menuCargado = true;
+}
+
+/** Recalcula el plan guardado con los precios de hoy (mismas recetas) */
+function planActual() {
+  const m = estado.menu;
+  if (!m.guardado?.dias?.length) return null;
+  const fijos = Object.fromEntries(m.guardado.dias.map((d) => [d.dia, d.recetaId]));
+  const perfil = { ...m.perfil, dias: m.guardado.dias.map((d) => d.dia) };
+  return planificar({ perfil, precios: m.precios, despensa: m.despensa, fijos, semilla: m.guardado.semilla || 1 });
+}
+
+async function generarMenu({ semilla, fijos = {}, excluir = [] } = {}) {
+  const m = estado.menu;
+  const s = semilla ?? ((m.guardado?.semilla || 0) + 1);
+  const plan = planificar({ perfil: m.perfil, precios: m.precios, despensa: m.despensa, semilla: s, fijos, excluir });
+  if (plan.error) return aviso(plan.error);
+  const cocinados = (m.guardado?.cocinados || []).filter((d) => fijos[d]);
+  m.guardado = { semilla: s, dias: plan.dias.map((d) => ({ dia: d.dia, recetaId: d.recetaId })), cocinados, generado: new Date().toISOString() };
+  await D.guardarMenu(m.semana, m.guardado);
+  render();
+}
+
+async function vistaMenu(v) {
+  if (!estado.menuCargado) v.innerHTML = '<div class="cargando"><div class="giro"></div></div>';
+  try { await cargarMenu(); } catch (e) { return errorAviso(e); }
+  if (estado.tab !== 'menu') return;
+  const m = estado.menu;
+  if (!m.tienePerfil) return formularioPerfil(v, { inicial: true });
+  const plan = planActual();
+  if (!plan) {
+    v.innerHTML = `<div class="vacio tarjeta" style="margin-top:8px"><b>Aún no hay menú esta semana</b>Arma los almuerzos con tus gustos y los precios de hoy.<br><br>
+      <button class="btn-primario" id="armar">Armar mi semana</button><br><button class="btn-texto" id="prefs">Preferencias</button></div>`;
+    $('#armar').onclick = () => generarMenu({ semilla: Date.now() % 100000 });
+    $('#prefs').onclick = () => hojaPerfil();
+    return;
+  }
+  const cocinados = new Set(m.guardado.cocinados || []);
+  const pres = Number(m.perfil.presupuesto) || 0;
+  const nombreDia = Object.fromEntries(DIAS);
+  const enLista = new Set(estado.lista.filter((i) => !i.comprado).map((i) => normalizar(i.nombre)));
+  const faltanEnLista = plan.compras.filter((c) => !enLista.has(normalizar(c.nombre)));
+
+  v.innerHTML = `
+    <section class="tarjeta reco menu-cab" style="margin-top:8px">
+      <div class="eti">Semana del ${esc(fechaCorta(m.semana))} · almuerzos para ${porcionesDe(m.perfil)}</div>
+      <div class="monto precio">${dinero(plan.total)}</div>
+      <div class="razon">${pres ? (plan.total <= pres ? `a comprar, dentro de tu presupuesto de ${dinero(pres)}` : `a comprar: ${dinero(plan.total - pres)} arriba de tu presupuesto de ${dinero(pres)}`) : 'a comprar esta semana'}</div>
+      ${plan.estimado ? '<span class="ahorro">Algunos precios son estimados</span>' : ''}
+    </section>
+
+    <h2 class="titulo">Almuerzos</h2>
+    <div class="tarjeta">${plan.dias.map((d) => {
+      const r = recetaPorId.get(d.recetaId);
+      return `
+      <div class="dia ${cocinados.has(d.dia) ? 'hecho' : ''}" data-dia="${d.dia}">
+        <button class="check" aria-label="Marcar como cocinado"></button>
+        <button class="info">
+          <div class="cuando">${esc(nombreDia[d.dia])}</div>
+          <div class="nombre">${esc(r.nombre)}</div>
+          <div class="sub"><span class="precio">${dinero(d.costo.porPorcion)}/porción</span><span>· ${r.minutos} min</span>${r.etiquetas.includes('rapido') ? '<span class="tag">rápido</span>' : ''}${r.etiquetas.includes('tradicional') ? '<span class="tag">típico</span>' : ''}</div>
+        </button>
+        <button class="mas cambiar" aria-label="Cambiar receta" title="Cambiar">↻</button>
+      </div>`;
+    }).join('')}</div>
+
+    <div style="display:flex;gap:10px;margin-top:12px">
+      <button class="btn-secundario" style="flex:1" id="otro">Generar otro menú</button>
+      <button class="btn-secundario" style="flex:1" id="prefs">Preferencias</button>
+    </div>
+
+    <h2 class="titulo">Compras para el menú</h2>
+    <div class="tarjeta">${plan.compras.map((c) => `
+      <div class="compra">
+        <div class="info">
+          <div class="n">${esc(c.nombre)} <span class="unit">· necesitas ${esc(cantidadTexto(c.necesita, c.unidad))}</span></div>
+          <div class="sub">${c.producto
+            ? `${c.paquetes > 1 ? `${c.paquetes} × ` : ''}${esc(c.producto.nombre)} ${chip(c.producto.tienda)}`
+            : '<span class="unit">precio estimado</span>'}</div>
+        </div>
+        <b class="precio">${dinero(c.costo)}</b>
+      </div>`).join('') || '<div class="vacio">Tienes todo en casa 🎉</div>'}
+    </div>
+    ${m.despensa.size ? `<p class="sub" style="margin:8px 4px">No se cuenta lo que ya tienes: ${[...m.despensa].map((id) => esc(INGREDIENTES[id]?.nombre || id)).join(', ')}.</p>` : ''}
+    <button class="btn-primario" id="a-lista" style="width:100%;margin-top:12px" ${faltanEnLista.length ? '' : 'disabled'}>
+      ${faltanEnLista.length ? `Agregar ${faltanEnLista.length} a mi lista` : 'Todo ya está en tu lista ✓'}</button>`;
+
+  $$('.dia', v).forEach((el) => {
+    const dia = el.dataset.dia;
+    const d = plan.dias.find((x) => x.dia === dia);
+    $('.info', el).onclick = () => hojaReceta(recetaPorId.get(d.recetaId), d, plan);
+    $('.check', el).onclick = async () => {
+      const set = new Set(m.guardado.cocinados || []);
+      set.has(dia) ? set.delete(dia) : set.add(dia);
+      m.guardado.cocinados = [...set];
+      await D.guardarMenu(m.semana, m.guardado);
+      render();
+    };
+    $('.cambiar', el).onclick = () => cambiarDia(dia, d.recetaId);
+  });
+  $('#otro').onclick = () => generarMenu({ semilla: (m.guardado.semilla || 0) + 1 });
+  $('#prefs').onclick = () => hojaPerfil();
+  $('#a-lista').onclick = (ev) => agregarComprasALista(faltanEnLista, ev.currentTarget);
+}
+
+function cambiarDia(dia, recetaActual) {
+  const m = estado.menu;
+  const fijos = Object.fromEntries(m.guardado.dias.filter((d) => d.dia !== dia).map((d) => [d.dia, d.recetaId]));
+  const excluir = [recetaActual, ...(m.guardado.descartadas?.[dia] || [])];
+  m.guardado.descartadas = { ...(m.guardado.descartadas || {}), [dia]: excluir.slice(-8) };
+  return generarMenu({ semilla: (m.guardado.semilla || 0) + 1, fijos, excluir });
+}
+
+/** Productos equivalentes del ingrediente en cada tienda, para que "Dónde comprar" compare */
+function productosParaLista(c) {
+  if (!c.producto) return [];
+  const ids = new Set([c.producto.id]);
+  const porTienda = new Map();
+  for (const p of c.alternativas) {
+    if (c.producto.ean && p.ean === c.producto.ean) { ids.add(p.id); continue; }
+    const parecido = Math.abs(p.contenido - c.producto.contenido) / c.producto.contenido <= 0.3;
+    if (parecido && !porTienda.has(p.tienda) && p.tienda !== c.producto.tienda) porTienda.set(p.tienda, p.id);
+  }
+  porTienda.forEach((id) => ids.add(id));
+  return [...ids];
+}
+
+async function agregarComprasALista(compras, btn) {
+  btn.disabled = true;
+  try {
+    for (const c of compras) {
+      await D.agregarItem({ nombre: c.nombre, cantidad: c.paquetes || 1, categoria: 'Súper', productos: productosParaLista(c) });
+    }
+    await cargarLista();
+    aviso(`${compras.length} ingrediente${compras.length === 1 ? '' : 's'} agregado${compras.length === 1 ? '' : 's'} a tu lista`);
+    render();
+  } catch (e) {
+    btn.disabled = false;
+    errorAviso(e);
+  }
+}
+
+function hojaReceta(r, d, plan) {
+  const m = estado.menu;
+  const porciones = plan.porciones;
+  const h = abrirHoja(`
+    <h3>${esc(r.nombre)}</h3>
+    <p class="sub" style="margin:-6px 0 10px">${porciones} porciones · ${r.minutos} min · ${dinero(d.costo.porPorcion)} por porción${d.costo.estimado ? ' (estimado)' : ''}</p>
+    <div class="cuerpo receta">
+      <h4>Ingredientes</h4>
+      <ul>${r.ing.map(([id, cant]) => `<li class="${m.despensa.has(id) || INGREDIENTES[id]?.basico ? 'tengo' : ''}">${esc(ingredienteEnReceta(id, cant, r, porciones))}</li>`).join('')}</ul>
+      <h4>Preparación</h4>
+      <ol>${r.pasos.map((p) => `<li>${esc(p)}</li>`).join('')}</ol>
+    </div>
+    <div class="pie">
+      <button class="btn-secundario" id="cambiar">Cambiar receta</button>
+      <button class="btn-primario" id="cerrar">Listo</button>
+    </div>`);
+  $('#cerrar', h).onclick = cerrarHoja;
+  $('#cambiar', h).onclick = () => { cerrarHoja(); cambiarDia(d.dia, r.id); };
+}
+
+function hojaPerfil() {
+  const h = abrirHoja('<h3>Preferencias del menú</h3><div class="cuerpo" id="perfil-cuerpo"></div>');
+  formularioPerfil($('#perfil-cuerpo', h), { inicial: false });
+}
+
+/** Configuración estilo NeatEat: quiénes comen, días, presupuesto, gustos, aparatos y despensa */
+function formularioPerfil(cont, { inicial }) {
+  const m = estado.menu;
+  const p = { ...m.perfil, dias: [...m.perfil.dias], estilos: [...m.perfil.estilos], evitar: [...m.perfil.evitar], aparatos: [...m.perfil.aparatos] };
+  const despensa = new Set(m.despensa);
+  const chips = (grupo, opciones, sel) => `<div class="chips" data-grupo="${grupo}">${opciones.map(([id, txt]) =>
+    `<button type="button" class="filtro" data-id="${esc(id)}" aria-pressed="${sel.includes(id)}">${esc(txt)}</button>`).join('')}</div>`;
+  const sugerido = Math.round(porcionesDe(p) * p.dias.length * 1.6);
+  cont.innerHTML = `
+    ${inicial ? `<section class="intro"><h2>Arma tus almuerzos de la semana</h2>
+      <p>Te propongo qué cocinar con lo más barato de esta semana y te paso los ingredientes a la lista.</p></section>` : ''}
+    <div class="${inicial ? 'tarjeta ' : ''}paso">
+      <h4>¿Cuántos comen?</h4>
+      <div class="dos">
+        <div class="campo">Adultos<div class="stepper"><button type="button" data-paso="adultos:-1">−</button><b id="v-adultos">${p.adultos}</b><button type="button" data-paso="adultos:1">+</button></div></div>
+        <div class="campo">Niños (media porción)<div class="stepper"><button type="button" data-paso="ninos:-1">−</button><b id="v-ninos">${p.ninos}</b><button type="button" data-paso="ninos:1">+</button></div></div>
+      </div>
+      <h4>¿Qué días cocinas almuerzo?</h4>
+      ${chips('dias', DIAS.map(([id, n]) => [id, n.slice(0, 3)]), p.dias)}
+      <h4>Presupuesto semanal para almuerzos</h4>
+      <label class="campo"><input id="presupuesto" type="number" inputmode="decimal" min="0" step="1" value="${p.presupuesto || ''}" placeholder="${sugerido}">
+        <span class="unit" id="sugerido">Un menú económico para ${porcionesDe(p)} sale aprox. $${sugerido} por ${p.dias.length} días.</span></label>
+      <h4>¿Cómo te gusta?</h4>
+      ${chips('estilos', ESTILOS, p.estilos)}
+      <h4>Además de la estufa, ¿qué tienes?</h4>
+      ${chips('aparatos', APARATOS, p.aparatos)}
+      <h4>No me gusta / no comemos</h4>
+      ${chips('evitar', EVITABLES, p.evitar)}
+      <h4>¿Qué ya tienes en casa?</h4>
+      <p class="unit" style="margin:-4px 0 8px">No se cuenta en las compras de la semana.</p>
+      ${chips('despensa', DESPENSA_COMUN.map((id) => [id, INGREDIENTES[id].nombre]), [...despensa])}
+    </div>
+    <button class="btn-primario" id="guardar-perfil" style="width:100%;margin-top:14px">${inicial ? 'Armar mi semana' : 'Guardar y rehacer menú'}</button>`;
+
+  const actualizarSugerido = () => {
+    const s = Math.round(porcionesDe(p) * p.dias.length * 1.6);
+    $('#sugerido', cont).textContent = `Un menú económico para ${porcionesDe(p)} sale aprox. $${s} por ${p.dias.length} días.`;
+    $('#presupuesto', cont).placeholder = s;
+  };
+  $$('[data-paso]', cont).forEach((b) => (b.onclick = () => {
+    const [k, delta] = b.dataset.paso.split(':');
+    p[k] = Math.max(k === 'adultos' ? 1 : 0, Math.min(12, p[k] + Number(delta)));
+    $(`#v-${k}`, cont).textContent = p[k];
+    actualizarSugerido();
+  }));
+  $$('.chips', cont).forEach((g) => $$('.filtro', g).forEach((b) => (b.onclick = () => {
+    const grupo = g.dataset.grupo;
+    const id = b.dataset.id;
+    const on = b.getAttribute('aria-pressed') !== 'true';
+    b.setAttribute('aria-pressed', String(on));
+    if (grupo === 'despensa') on ? despensa.add(id) : despensa.delete(id);
+    else p[grupo] = on ? [...p[grupo], id] : p[grupo].filter((x) => x !== id);
+    if (grupo === 'dias') actualizarSugerido();
+  })));
+  $('#guardar-perfil', cont).onclick = async (ev) => {
+    if (!p.dias.length) return aviso('Elige al menos un día.');
+    p.presupuesto = Number($('#presupuesto', cont).value) || Math.round(porcionesDe(p) * p.dias.length * 1.6);
+    ev.currentTarget.disabled = true;
+    try {
+      await Promise.all([D.guardarAjuste('perfil_menu', p), D.guardarAjuste('despensa', [...despensa])]);
+      estado.ajustes.perfil_menu = p;
+      estado.ajustes.despensa = [...despensa];
+      Object.assign(m, { perfil: p, despensa, tienePerfil: true });
+      cerrarHoja();
+      await generarMenu({ semilla: Date.now() % 100000 });
+    } catch (e) {
+      ev.currentTarget.disabled = false;
+      errorAviso(e);
+    }
+  };
 }
 
 // ---------------------------------------------------------------- COMPARAR
@@ -701,6 +977,7 @@ async function hojaAjustes() {
       await Promise.all([D.guardarAjuste('umbral_segunda_tienda', umbral), D.guardarAjuste('tiendas_cercanas', tiendas)]);
       estado.ajustes.umbral_segunda_tienda = umbral;
       estado.ajustes.tiendas_cercanas = tiendas;
+      estado.menuCargado = false; // recalcular precios del menú con las tiendas nuevas
       cerrarHoja();
       render();
     } catch (e) { errorAviso(e); }
