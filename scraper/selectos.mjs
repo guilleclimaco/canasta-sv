@@ -45,10 +45,15 @@ export function extraerTarjetas() {
 
     const texto = card.innerText || '';
     const promo = texto.match(/(\d+)\s*[xX]\s*\$\s?(\d+(?:[.,]\d{1,2})?)/);
-    const montos = [...texto.matchAll(/\$\s?(\d+(?:[.,]\d{1,2})?)/g)]
+    let montos = [...texto.matchAll(/\$\s?(\d+(?:[.,]\d{1,2})?)/g)]
       .filter((m) => !(promo && m.index >= promo.index && m.index <= promo.index + promo[0].length))
       .map((m) => parseFloat(m[1].replace(',', '.')))
       .filter((n) => n > 0);
+    // Tarjeta real (oct 2026): <strong class="precio">$1.85</strong> <span class="antes">$2.50</span>
+    // <span class="ahorro">$0.65</span>. Sin esto, el "ahorro" se tomaba como precio.
+    const precioEl = card.querySelector('strong.precio, .precios .precio');
+    const precioReal = precioEl ? parseFloat((precioEl.innerText.match(/\d+(?:[.,]\d{1,2})?/) || [''])[0].replace(',', '.')) : NaN;
+    if (precioReal > 0) montos = [precioReal];
     const tachado = card.querySelector('del, s, strike, [class*="tachad"], [class*="old"], [class*="antes"], [class*="before"]');
     const precioTachado = tachado ? parseFloat((tachado.innerText.match(/\d+(?:[.,]\d{1,2})?/) || [''])[0].replace(',', '.')) : null;
 
@@ -132,10 +137,13 @@ export async function correrSelectos({ modo = 'normal' } = {}) {
       console.warn('⚠ Selectos bloqueó o no está disponible. Se omite hoy.');
       return { filas: 0, bloqueado: true };
     }
-    const enlaces = await page.$$eval('a[href]', (as) =>
+    const leerEnlaces = () => page.$$eval('a[href]', (as) =>
       [...new Set(as.map((a) => a.href).filter((h) => /\/products\?category=|\/products-landing\/|\/special-deals/.test(h)))]);
-    const paginas = [BASE, ...enlaces].slice(0, MAX_PAGINAS);
-    console.log(`Selectos: ${enlaces.length} páginas de categorías/ofertas encontradas, recorro ${paginas.length}.`);
+    const enlaces = await leerEnlaces();
+    // La portada solo enlaza promociones; las categorías (/products?category=) salen en cada tarjeta,
+    // así que se van agregando a la cola mientras se recorre (hasta MAX_PAGINAS).
+    const paginas = [BASE, ...enlaces];
+    console.log(`Selectos: ${enlaces.length} páginas de ofertas en la portada; recorro hasta ${MAX_PAGINAS} sumando categorías.`);
 
     if (modo === 'descubrir') {
       const dir = path.join(DIR, 'selectos-debug');
@@ -156,7 +164,8 @@ export async function correrSelectos({ modo = 'normal' } = {}) {
       return { filas: 0 };
     }
 
-    for (const [i, url] of paginas.entries()) {
+    for (let i = 0; i < paginas.length && i < MAX_PAGINAS; i++) {
+      const url = paginas[i];
       try {
         if (i > 0) await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
         if (await bloqueado(page)) {
@@ -169,7 +178,8 @@ export async function correrSelectos({ modo = 'normal' } = {}) {
           const f = aFila(t);
           if (f) productos.set(f.sku, f);
         }
-        console.log(`  [${i + 1}/${paginas.length}] ${tarjetas.length} tarjetas — total ${productos.size}`);
+        for (const h of await leerEnlaces()) if (!paginas.includes(h)) paginas.push(h);
+        console.log(`  [${i + 1}/${Math.min(paginas.length, MAX_PAGINAS)}] ${tarjetas.length} tarjetas — total ${productos.size}`);
       } catch (e) {
         console.warn(`  Falló ${url}: ${e.message}`);
       }

@@ -10,6 +10,6 @@
     "selectos:seco": "node selectos.mjs --seco"
   },
   "dependencies": {
-    "playwright": "1.47.2"
+    "playwright": "1.64.0"
   }
 }
