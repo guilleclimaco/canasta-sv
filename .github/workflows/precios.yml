@@ -1,0 +1,47 @@
+name: Precios diarios
+
+on:
+  schedule:
+    - cron: '0 12 * * *'   # 12:00 UTC = 6:00 a.m. en El Salvador
+  workflow_dispatch:       # botón "Run workflow" para correrlo a mano
+
+permissions:
+  contents: write          # solo para el "latido" mensual (ver último paso)
+
+jobs:
+  precios:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Instalar dependencias
+        run: npm install --prefix scraper --no-audit --no-fund
+
+      - name: Instalar navegador (solo si Selectos está activo)
+        if: ${{ vars.SELECTOS != '0' }}
+        run: npx --prefix scraper playwright install --with-deps chromium
+
+      - name: Actualizar precios
+        run: node scraper/actualizar.mjs
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          SELECTOS: ${{ vars.SELECTOS || '1' }}
+
+      # GitHub apaga los workflows programados de repos sin actividad en 60 días.
+      # El día 1 de cada mes se guarda un cambio mínimo para mantenerlo vivo.
+      - name: Latido mensual
+        if: ${{ github.event_name == 'schedule' }}
+        run: |
+          if [ "$(date -u +%d)" = "01" ]; then
+            date -u +%Y-%m-%dT%H:%MZ > .latido
+            git config user.name "canasta-bot"
+            git config user.email "canasta-bot@users.noreply.github.com"
+            git add .latido
+            git commit -m "latido mensual" && git push || true
+          fi

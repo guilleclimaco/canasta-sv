@@ -1,0 +1,15 @@
+project_id = "canasta-sv"
+
+# La función "precios" revisa ella misma quién la llama (miembro del hogar
+# o CRON_SECRET), por eso no se exige JWT a nivel de gateway.
+[functions.precios]
+verify_jwt = false
+
+# Login con código de 6 dígitos (no link), para que funcione dentro de la app instalada en iPhone.
+[auth]
+site_url = "https://guilleclimaco.github.io/canasta-sv/"
+additional_redirect_urls = ["https://guilleclimaco.github.io/canasta-sv/"]
+
+[auth.email]
+enable_signup = true
+enable_confirmations = true

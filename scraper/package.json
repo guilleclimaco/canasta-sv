@@ -1,0 +1,15 @@
+{
+  "name": "canasta-sv-scraper",
+  "private": true,
+  "type": "module",
+  "description": "Robot diario de precios de supermercados de El Salvador",
+  "scripts": {
+    "probar": "node probar.mjs",
+    "actualizar": "node actualizar.mjs",
+    "selectos:descubrir": "node selectos.mjs --descubrir",
+    "selectos:seco": "node selectos.mjs --seco"
+  },
+  "dependencies": {
+    "playwright": "1.47.2"
+  }
+}

@@ -1,0 +1,9 @@
+node_modules/
+scraper/.env
+.env
+scraper/selectos-debug/
+scraper/*.log
+supabase/.temp/
+supabase/.branches/
+.DS_Store
+Thumbs.db
