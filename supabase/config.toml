@@ -13,3 +13,11 @@ additional_redirect_urls = ["https://guilleclimaco.github.io/canasta-sv/"]
 [auth.email]
 enable_signup = true
 enable_confirmations = true
+
+[auth.email.template.magic_link]
+subject = "Tu código para Canasta"
+content_path = "./supabase/templates/codigo.html"
+
+[auth.email.template.confirmation]
+subject = "Tu código para Canasta"
+content_path = "./supabase/templates/codigo.html"
