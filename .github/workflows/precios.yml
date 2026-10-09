@@ -23,7 +23,7 @@ jobs:
         run: npm install --prefix scraper --no-audit --no-fund
 
       - name: Instalar navegador (solo si Selectos está activo)
-        if: ${{ vars.SELECTOS != '0' }}
+        if: ${{ (vars.SELECTOS || '1') != '0' }}
         run: npx --prefix scraper playwright install --with-deps chromium
 
       - name: Actualizar precios
