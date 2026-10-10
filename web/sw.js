@@ -1,10 +1,10 @@
 // Service worker mínimo: guarda la "cáscara" de la app para que abra rápido
 // y sin señal muestre al menos la interfaz. Los datos siempre vienen de la red.
 // Sube VERSION cada vez que cambies archivos de web/ para que los celulares actualicen.
-const VERSION = 'canasta-v5.1';
+const VERSION = 'canasta-v5.2';
 const CASCARA = ['./', 'index.html', 'estilos.css', 'app.js', 'datos.js', 'optimizador.js', 'config.js', 'manifest.webmanifest', 'icons/icon-192.png',
   'menu/ingredientes.js', 'menu/recetas.js', 'menu/recetas-desayunos.js', 'menu/recetas-cenas.js',
-  'menu/recetas-refacciones.js', 'menu/recetas-comedor.js', 'menu/planificador.js', 'menu/mercado.js', 'nucleo.js',
+  'menu/recetas-refacciones.js', 'menu/recetas-comedor.js', 'menu/recetas-generadas.js', 'menu/planificador.js', 'menu/mercado.js', 'nucleo.js',
   'v4/despensa.js', 'v4/historial.js', 'v4/mercado-ui.js', 'v4/super.js', 'v4/compartir.js', 'v4/escaner.js',
   'v4/ticket.js', 'v4/avisos.js', 'v4/recetas-ui.js', 'v4/ia.js', 'v4/resumen.js',
   'hogar/catalogo.js', 'hogar/necesidades.js', 'v5/hogar-ui.js'];

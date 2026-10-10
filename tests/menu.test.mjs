@@ -220,7 +220,8 @@ test('compras elige la presentación más barata en total, no por unidad', () =>
 test('costo por porción razonable en cada tipo de comida', () => {
   for (const r of RECETAS) {
     const c = costoReceta(r, 4, precios);
-    assert.ok(c.porPorcion > 0.05 && c.porPorcion < 4, `${r.id}: $${c.porPorcion}/porción`);
+    // hay platos caros a propósito (lomito, camarón, mariscos); arriba de $8 por porción sería un error de cantidades
+    assert.ok(c.porPorcion > 0.05 && c.porPorcion < 8, `${r.id}: $${c.porPorcion}/porción`);
   }
   assert.equal(cantidadTexto(453.59, 'g'), '450 g (1 lb)');
   assert.equal(cantidadTexto(1814, 'g'), '1.8 kg (4 lb)');
@@ -276,4 +277,29 @@ test('recetario de comedor: platos típicos con popularidad y etiquetas', () => 
   for (const r of RECETAS) assert.ok(r.popularidad >= 1 && r.popularidad <= 5, `${r.id}: popularidad`);
   assert.ok(receta('pollo-dorado').etiquetas.includes('frito'));
   assert.ok(receta('tilapia-frita').etiquetas.includes('frito'));
+});
+
+test('recetario ampliado: ~3000 recetas en tres niveles de precio, con platos de casa', () => {
+  assert.ok(RECETAS.length >= 2800, `solo ${RECETAS.length} recetas`);
+  for (const n of ['barato', 'intermedio', 'caro']) assert.ok(RECETAS.filter((r) => r.nivel === n).length >= 900, n);
+  const nombres = RECETAS.map((r) => r.nombre);
+  for (const n of ['Hígado encebollado con arroz y frijoles volteados', 'Pan con aguacate', 'Lengua en salsa con arroz y ensalada verde', 'Sopa de pata con tortillas y limón'])
+    assert.ok(nombres.includes(n), n);
+  assert.ok(!nombres.some((n) => / con .* con .* con /.test(n)), 'nombres con "con … con … con"');
+  for (const r of RECETAS) assert.ok(['barato', 'intermedio', 'caro'].includes(r.nivel) && r.costoRef > 0, r.id);
+});
+
+test('la semana no repite el plato fuerte aunque cambien los acompañamientos', () => {
+  const plan = planificar({ perfil: { adultos: 2, comidas: TODO }, precios, semilla: 21 });
+  const fuertes = plan.slots.filter((s) => ['almuerzo', 'cena'].includes(s.comida) && !s.sobraDe).map((s) => receta(s.recetaId).familia || s.recetaId);
+  assert.equal(new Set(fuertes).size, fuertes.length, `repetidos: ${fuertes.filter((f, i) => fuertes.indexOf(f) !== i).join(', ')}`);
+});
+
+test('no me gusta: mariscos y vísceras', () => {
+  const plan = planificar({ perfil: { adultos: 2, comidas: TODO, evitar: ['mariscos', 'visceras'] }, precios, semilla: 8 });
+  for (const s of plan.slots) {
+    const r = receta(s.recetaId);
+    assert.notEqual(r.proteina, 'mariscos', r.id);
+    assert.ok(!r.etiquetas.includes('visceras') && !r.ing.some(([i]) => ['higado', 'lengua', 'mondongo'].includes(i)), r.id);
+  }
 });

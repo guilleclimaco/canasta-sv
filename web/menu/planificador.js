@@ -234,6 +234,7 @@ export function recetasPosibles(perfilEntrada, tiempo = null, recetas = RECETAS,
       (r.aparatos || []).every((a) => aparatos.has(a) || a === 'licuadora') &&
       !evitar.has(r.proteina) &&
       !r.ing.some(([id]) => evitar.has(id)) &&
+      !etiquetas.some((e) => evitar.has(e)) &&
       !(evitar.has('picante') && etiquetas.includes('picante')) &&
       (!soloVeg || etiquetas.includes('vegetariano') || r.proteina === 'vegetal') &&
       (!perfil.sinFritos || !etiquetas.includes('frito')) &&
@@ -390,11 +391,13 @@ export function planificar({
   const protPrincipal = new Map(); // proteína -> veces en almuerzo/cena
   const familias = new Map(); // familia de plato (pupusas, sopa, huevos…) -> veces en la semana
   const familia = (r) => r.familia || String(r.id).split('-')[0];
+  const tecnicas = new Map(); // estilo de cocina (entomatado, encebollado…) -> veces en almuerzo/cena
   const verduraDia = new Set();
   const usar = (slot, r) => {
     elegido[claveSlot(slot.dia, slot.comida)] = r.id;
     usos.set(r.id, (usos.get(r.id) || 0) + 1);
     familias.set(familia(r), (familias.get(familia(r)) || 0) + 1);
+    if (r.tecnica && ['almuerzo', 'cena'].includes(TIEMPO[slot.comida])) tecnicas.set(r.tecnica, (tecnicas.get(r.tecnica) || 0) + 1);
     r.ing.forEach(([id]) => { ingUsados.add(id); vence.delete(id); });
     if (['almuerzo', 'cena'].includes(TIEMPO[slot.comida])) protPrincipal.set(r.proteina, (protPrincipal.get(r.proteina) || 0) + 1);
     if (tieneVerdura(r)) verduraDia.add(slot.dia);
@@ -454,7 +457,9 @@ export function planificar({
       if (ayer?.proteina === r.proteina) p += 1.2;
       const n = protPrincipal.get(r.proteina) || 0; // misma proteína en la semana: cada vez pesa más
       p += n * 0.5 + Math.max(0, n - 1) * 0.9;
-      p += (familias.get(familia(r)) || 0) * 1.2; // dos pupusas o dos sopas en la semana, menos probable
+      // el mismo plato fuerte con otros acompañamientos (o dos pupusas, dos sopas) en la semana: casi nunca
+      p += (familias.get(familia(r)) || 0) * (r.familia ? 3 : 1.2);
+      if (r.tecnica) p += (tecnicas.get(r.tecnica) || 0) * 0.9; // no cuatro "entomatados" en la semana
     }
     if (t === 'refaccion') {
       const otra = recetaEn(s.dia, s.comida === 'refaccion_am' ? 'refaccion_pm' : 'refaccion_am');
@@ -511,10 +516,13 @@ export function planificar({
       // variedad: cuántas otras comidas principales ya tienen esa proteína o esa familia de plato
       const principal = ['almuerzo', 'cena'].includes(TIEMPO[x.comida]);
       const otras = principal ? plan.slots.filter((y) => y !== x && !y.sobraDe && ['almuerzo', 'cena'].includes(TIEMPO[y.comida])).map((y) => porId.get(y.recetaId)) : [];
-      const repetido = (r) => otras.filter((o) => o.proteina === r.proteina).length * 0.5 + otras.filter((o) => familia(o) === familia(r)).length * 0.8;
+      const repetido = (r) => otras.filter((o) => o.proteina === r.proteina).length * 0.5 + otras.filter((o) => familia(o) === familia(r)).length * 0.8
+        + (r.tecnica ? otras.filter((o) => o.tecnica === r.tecnica).length * 0.6 : 0);
       const cActual = x.costo.aComprar;
       for (const r of candidatasPara(porClave.get(k))) {
         if (r.id === actual.id || calificaciones[r.id] === -1 || (usadas.get(r.id) || 0) >= MAX_USOS[TIEMPO[x.comida]]) continue;
+        // el mismo plato fuerte con otros acompañamientos no entra dos veces en la semana
+        if (r.familia && familia(r) !== familia(actual) && otras.some((o) => familia(o) === familia(r))) continue;
         const dif = costo(r, x.porcionesCocinar).aComprar - cActual;
         const dGusto = gustoDe.get(r.id) - gustoDe.get(actual.id) - (repetido(r) - repetido(actual));
         let valor;

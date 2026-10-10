@@ -11,6 +11,8 @@ import { DESAYUNOS } from './recetas-desayunos.js';
 import { CENAS } from './recetas-cenas.js';
 import { REFACCIONES } from './recetas-refacciones.js';
 import { COMEDOR } from './recetas-comedor.js';
+import { RECETAS_GENERADAS } from './recetas-generadas.js';
+import { INGREDIENTES } from './ingredientes.js';
 
 const ALMUERZOS = [
   {
@@ -385,7 +387,7 @@ const POPULARIDAD = {
 const FRITOS = ['tilapia-frita', 'tortas-de-papa', 'tortas-de-guisquil', 'chiles-rellenos', 'tortitas-de-atun', 'hamburguesas',
   'platano-con-crema', 'pastelitos', 'yuca-con-chicharron', 'platanitos', 'empanadas-platano', 'enchiladas', 'tostadas-de-frijol'];
 
-export const RECETAS = [...ALMUERZOS, ...COMEDOR, ...DESAYUNOS, ...CENAS, ...REFACCIONES];
+export const RECETAS = [...ALMUERZOS, ...COMEDOR, ...DESAYUNOS, ...CENAS, ...REFACCIONES, ...RECETAS_GENERADAS];
 
 // Aguantan ir en lonchera / tupper (se comen frías o se recalientan bien)
 const LONCHERA = new Set([
@@ -406,7 +408,35 @@ const NO_SOBRAS = new Set(['tacos-de-pollo', 'tilapia-frita', 'hamburguesas', 'p
   'pupusas-revueltas', 'pupusas-loroco', 'pollo-empanizado', 'huevos-entomatados', 'carne-asada', 'yuca-sancochada']);
 for (const r of RECETAS) {
   r.popularidad ??= POPULARIDAD[r.id] ?? 3;
+  // dos pupusas, dos sopas o dos tamales en la semana cuentan como repetir plato
+  const fam = /^(pupusas|sopa|tamales)/.exec(r.id);
+  if (fam) r.familia = fam[1];
   if (FRITOS.includes(r.id) && !r.etiquetas.includes('frito')) r.etiquetas.push('frito');
   if (LONCHERA.has(r.id) && !r.etiquetas.includes('lonchera')) r.etiquetas.push('lonchera');
-  r.sobras = !NO_SOBRAS.has(r.id) && r.tiempos.some((t) => t === 'almuerzo' || t === 'cena');
+  // lo frito, las pupusas, los tacos y los ceviches no aguantan para comerse después
+  r.sobras = !NO_SOBRAS.has(r.id) && !NO_SOBRAS.has(r.familia) && !r.etiquetas.includes('frito')
+    && !/^(pupusas|tacos|ceviche|coctel|des-|ref-|panes-)/.test(r.familia || r.id) && r.tiempos.some((t) => t === 'almuerzo' || t === 'cena');
+}
+
+// ---------------------------------------------------------------- niveles de precio
+// Costo por porción con los precios de referencia del catálogo (el estable; el real cambia cada día).
+// barato / intermedio / caro = tercio de abajo, del medio y de arriba DENTRO de su tipo de comida
+// (un desayuno barato se compara con desayunos, no con almuerzos).
+export function costoReferencia(r) {
+  let t = 0;
+  for (const [id, cant] of r.ing) {
+    const ing = INGREDIENTES[id];
+    if (!ing || ing.basico) continue;
+    t += cant * (ing.unidad === 'und' ? ing.ref : ing.ref / 100);
+  }
+  return t / r.porciones;
+}
+export const NIVELES = [['barato', 'Baratas'], ['intermedio', 'Intermedias'], ['caro', 'Caras']];
+const grupoDe = (r) => (r.tiempos.includes('almuerzo') || r.tiempos.includes('cena') ? 'principal' : r.tiempos[0]);
+for (const g of new Set(RECETAS.map(grupoDe))) {
+  const del = RECETAS.filter((r) => grupoDe(r) === g).map((r) => [r, costoReferencia(r)]).sort((a, b) => a[1] - b[1]);
+  del.forEach(([r, c], i) => {
+    r.costoRef = Math.round(c * 100) / 100;
+    r.nivel = i < del.length / 3 ? 'barato' : i < (2 * del.length) / 3 ? 'intermedio' : 'caro';
+  });
 }

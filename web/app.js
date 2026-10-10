@@ -502,7 +502,8 @@ function hojaElegir(item) {
 
 // ---------------------------------------------------------------- MENÚ (todas las comidas de la semana)
 const ESTILOS = [['tradicional', 'Típico'], ['comedor', 'Estilo comedor'], ['rapido', 'Rápido'], ['saludable', 'Saludable'], ['ninos', 'Para niños'], ['vegetariano', 'Vegetariano'], ['economico', 'Lo más económico']];
-const PROTEINAS = [['pollo', 'Pollo'], ['res', 'Res'], ['cerdo', 'Cerdo'], ['pescado', 'Pescado'], ['huevo', 'Huevo'], ['vegetal', 'Sin carne']];
+const PROTEINAS = [['pollo', 'Pollo'], ['res', 'Res'], ['cerdo', 'Cerdo'], ['pescado', 'Pescado'], ['mariscos', 'Mariscos'], ['huevo', 'Huevo'], ['embutido', 'Embutidos'], ['vegetal', 'Sin carne']];
+const NIVEL_TXT = { barato: '$', intermedio: '$$', caro: '$$$' };
 const TIEMPOS_MAX = [[0, 'Sin límite'], [30, '30 min'], [45, '45 min'], [60, '1 hora']];
 const ETIQUETA_TXT = { rapido: 'rápido', tradicional: 'típico', comedor: 'comedor', saludable: 'saludable', ninos: 'niños', frito: 'frito', lonchera: 'lonchera', finde: 'fin de semana' };
 const estrellas = (n) => '★'.repeat(n ?? 3) + '☆'.repeat(5 - (n ?? 3));
@@ -846,10 +847,15 @@ function hojaElegirReceta(slot) {
   const desp = despensaParaPlan();
   const tiempo = TIEMPO_DE[slot.comida];
   // "Ver todas" ignora los filtros de Preferencias (no me gusta, sin frituras, tiempo máximo…)
-  const base = (todas) => (todas ? todasRecetas().filter((r) => (r.tiempos || ['almuerzo']).includes(tiempo)) : recetasPosibles(m.perfil, tiempo, todasRecetas(), slot.dia))
+  // el costo de ~3000 recetas se calcula una vez por hoja, no en cada tecla
+  const cacheBase = {};
+  const base = (todas) => (cacheBase[todas] ||= (todas ? todasRecetas().filter((r) => (r.tiempos || ['almuerzo']).includes(tiempo)) : recetasPosibles(m.perfil, tiempo, todasRecetas(), slot.dia))
     .filter((r) => cal[r.id] !== -1)
-    .map((r) => ({ r, c: costoReceta(r, slot.porciones, m.precios, desp), g: gusto(r, m.perfil) + (cal[r.id] === 1 ? 1 : 0) }));
-  const f = estado.filtroRecetas ||= { prot: 'todas', rapidas: false, tipicas: false, saludables: false, sinFritos: false, lonchera: false, orden: 'populares', todas: false };
+    .map((r) => ({ r, c: costoReceta(r, slot.porciones, m.precios, desp), g: gusto(r, m.perfil) + (cal[r.id] === 1 ? 1 : 0) })));
+  const f = estado.filtroRecetas ||= { prot: 'todas', nivel: 'todos', rapidas: false, tipicas: false, saludables: false, sinFritos: false, lonchera: false, orden: 'populares', todas: false };
+  f.nivel ||= 'todos';
+  const NIVELES_UI = [['todos', 'Todos los precios'], ['barato', '$ Baratas'], ['intermedio', '$$ Intermedias'], ['caro', '$$$ Caras']];
+  let mostrar = 60;
   const ORDENES = [['populares', 'Más conocidas'], ['baratas', 'Más baratas'], ['rapidas', 'Más rápidas'], ['caras', 'Más completas']];
   const RAPIDOS = [['rapidas', '≤ 30 min'], ['tipicas', 'Típicas'], ['saludables', 'Saludables'], ['sinFritos', 'Sin frituras'], ['lonchera', 'Lonchera']];
   const h = abrirHoja(`
@@ -861,6 +867,7 @@ function hojaElegirReceta(slot) {
       <button class="filtro" data-p="todas">Todas</button>
       ${PROTEINAS.map(([id, txt]) => `<button class="filtro" data-p="${id}">${esc(txt)}</button>`).join('')}
     </div>
+    <div class="filtros compactos" id="f-nivel">${NIVELES_UI.map(([id, txt]) => `<button class="filtro" data-n="${id}">${esc(txt)}</button>`).join('')}</div>
     <div class="filtros compactos" id="f-rap">${RAPIDOS.map(([id, txt]) => `<button class="filtro" data-r="${id}">${esc(txt)}</button>`).join('')}</div>
     <div class="fila-orden">
       <label>Ordenar <select id="f-orden">${ORDENES.map(([id, txt]) => `<option value="${id}">${esc(txt)}</option>`).join('')}</select></label>
@@ -872,6 +879,7 @@ function hojaElegirReceta(slot) {
   let q = '';
   const pintar = () => {
     $$('[data-p]', h).forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.p === f.prot)));
+    $$('[data-n]', h).forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.n === f.nivel)));
     $$('[data-r]', h).forEach((b) => b.setAttribute('aria-pressed', String(!!f[b.dataset.r])));
     $('#f-orden', h).value = f.orden;
     $('#f-todas', h).checked = f.todas;
@@ -879,6 +887,7 @@ function hojaElegirReceta(slot) {
     const lista = base(f.todas).filter(({ r }) => {
       const et = r.etiquetas || [];
       if (f.prot !== 'todas' && r.proteina !== f.prot) return false;
+      if (f.nivel !== 'todos' && r.nivel && r.nivel !== f.nivel) return false;
       if (f.rapidas && r.minutos > 30) return false;
       if (f.tipicas && !et.includes('tradicional') && !et.includes('comedor')) return false;
       if (f.saludables && !et.includes('saludable')) return false;
@@ -893,21 +902,29 @@ function hojaElegirReceta(slot) {
       rapidas: () => a.r.minutos - b.r.minutos || b.g - a.g,
       caras: () => b.c.porPorcion - a.c.porPorcion,
     })[f.orden]());
-    $('#recetas', h).innerHTML = `<p class="unit" style="margin:2px 2px 8px">${lista.length} receta${lista.length === 1 ? '' : 's'}</p>` + (lista.map(({ r, c }) => `
+    // que la primera pantalla muestre platos distintos: la 2.ª variante de cada plato fuerte va después de todas las 1.ª
+    const vez = new Map();
+    lista.forEach((x) => { const k = x.r.familia || x.r.id; vez.set(k, (vez.get(k) || 0) + 1); x.vez = vez.get(k); });
+    lista.sort((a, b) => a.vez - b.vez);
+    $('#recetas', h).innerHTML = `<p class="unit" style="margin:2px 2px 8px">${lista.length} receta${lista.length === 1 ? '' : 's'}</p>` + (lista.slice(0, mostrar).map(({ r, c }) => `
       <button class="opcion-receta ${r.id === slot.recetaId ? 'actual' : ''}" data-id="${r.id}">
         <span class="n">${esc(r.nombre)}${r.id === slot.recetaId ? ' <span class="tag">actual</span>' : ''}${cal[r.id] === 1 ? ' 👍' : ''}${r.propia ? ' <span class="tag">familia</span>' : ''}</span>
-        <span class="sub"><span class="estrellas" title="Qué tan común es">${estrellas(r.popularidad)}</span><span class="precio">${dinero(c.porPorcion)}/porción</span><span>· ${r.minutos} min</span>${(r.etiquetas || []).filter((e) => ETIQUETA_TXT[e]).slice(0, 3).map((e) => `<span class="tag">${ETIQUETA_TXT[e]}</span>`).join('')}</span>
-      </button>`).join('') || '<div class="vacio">Ninguna receta coincide. Quita algún filtro o marca "Ver todas".</div>');
+        <span class="sub"><span class="estrellas" title="Qué tan común es">${estrellas(r.popularidad)}</span>${r.nivel ? `<span class="nivel nivel-${r.nivel}" title="Nivel de precio">${NIVEL_TXT[r.nivel]}</span>` : ''}<span class="precio">${dinero(c.porPorcion)}/porción</span><span>· ${r.minutos} min</span>${(r.etiquetas || []).filter((e) => ETIQUETA_TXT[e]).slice(0, 3).map((e) => `<span class="tag">${ETIQUETA_TXT[e]}</span>`).join('')}</span>
+      </button>`).join('') || '<div class="vacio">Ninguna receta coincide. Quita algún filtro o marca "Ver todas".</div>')
+      + (lista.length > mostrar ? `<button class="btn-secundario" id="ver-mas" style="width:100%;margin:8px 0">Ver ${Math.min(60, lista.length - mostrar)} más (de ${lista.length - mostrar})</button>` : '');
+    $('#ver-mas', h)?.addEventListener('click', () => { mostrar += 60; pintar(); });
     $$('.opcion-receta', h).forEach((b) => (b.onclick = async () => {
       cerrarHoja();
       if (b.dataset.id !== slot.recetaId) await elegirReceta(slot, b.dataset.id);
     }));
   };
-  $('#f-rec input', h).oninput = (ev) => { q = ev.target.value; pintar(); };
-  $$('[data-p]', h).forEach((b) => (b.onclick = () => { f.prot = b.dataset.p; pintar(); }));
-  $$('[data-r]', h).forEach((b) => (b.onclick = () => { f[b.dataset.r] = !f[b.dataset.r]; pintar(); }));
-  $('#f-orden', h).onchange = (ev) => { f.orden = ev.target.value; pintar(); };
-  $('#f-todas', h).onchange = (ev) => { f.todas = ev.target.checked; pintar(); };
+  const otraVez = () => { mostrar = 60; pintar(); };
+  $('#f-rec input', h).oninput = debounce((ev) => { q = ev.target.value; otraVez(); }, 150);
+  $$('[data-p]', h).forEach((b) => (b.onclick = () => { f.prot = b.dataset.p; otraVez(); }));
+  $$('[data-n]', h).forEach((b) => (b.onclick = () => { f.nivel = b.dataset.n; otraVez(); }));
+  $$('[data-r]', h).forEach((b) => (b.onclick = () => { f[b.dataset.r] = !f[b.dataset.r]; otraVez(); }));
+  $('#f-orden', h).onchange = (ev) => { f.orden = ev.target.value; otraVez(); };
+  $('#f-todas', h).onchange = (ev) => { f.todas = ev.target.checked; otraVez(); };
   pintar();
 }
 

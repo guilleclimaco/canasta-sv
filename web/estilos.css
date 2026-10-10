@@ -490,3 +490,8 @@ details.bien[open] summary::after { content: " ▴"; }
 .opcion-hogar .unit { display: block; }
 /* casa: puntos de estado en los títulos (en vez de emojis de colores fuera de la paleta) */
 .punto-est { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; vertical-align: 1px; background: var(--c); }
+/* nivel de precio de cada receta ($ / $$ / $$$) */
+.nivel { font-size: 11.5px; font-weight: 800; letter-spacing: 1px; padding: 1px 6px; border-radius: 6px; margin-right: 4px; }
+.nivel-barato { background: var(--cian-suave); color: var(--prusia); }
+.nivel-intermedio { background: var(--verde-suave); color: var(--prusia); }
+.nivel-caro { background: var(--ahorro-suave); color: var(--crimson); }
