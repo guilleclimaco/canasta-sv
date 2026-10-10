@@ -303,3 +303,36 @@ test('no me gusta: mariscos y vísceras', () => {
     assert.ok(!r.etiquetas.includes('visceras') && !r.ing.some(([i]) => ['higado', 'lengua', 'mondongo'].includes(i)), r.id);
   }
 });
+
+test('rango obligatorio: con perfiles al azar el plan queda en el rango o avisa que es imposible', () => {
+  let a = 777;
+  const rnd = () => ((a = (a * 1103515245 + 12345) % 2147483648) / 2147483648);
+  const COM = ['desayuno', 'refaccion_am', 'almuerzo', 'refaccion_pm', 'cena'];
+  for (let i = 0; i < 40; i++) {
+    const comidas = {};
+    for (const c of COM) if (rnd() < 0.6) comidas[c] = { dias: SEMANA.filter(() => rnd() < 0.7) };
+    comidas.almuerzo = { dias: LV };
+    const adultos = 1 + Math.floor(rnd() * 4);
+    const sug = presupuestoSugerido({ adultos, comidas });
+    const min = Math.round(sug.min * (0.5 + rnd() * 1.5));
+    const max = Math.round(min * (1.15 + rnd() * 0.5));
+    const plan = planificar({ perfil: { adultos, comidas, presupuestoMin: min, presupuestoMax: max }, precios, semilla: i });
+    if (plan.imposible) assert.ok(plan.total > max, `#${i}: dice imposible pero $${plan.total} ≤ $${max}`);
+    else assert.ok(plan.total <= max + 0.01 && plan.total >= min - 0.01, `#${i}: $${plan.total} fuera de $${min}–$${max}`);
+  }
+});
+
+test('el total del plan es lo que se paga en la caja (paquetes enteros)', () => {
+  const plan = planificar({ perfil: { adultos: 2, comidas: { almuerzo: { dias: LV } } }, precios, semilla: 2 });
+  const caja = plan.compras.reduce((s, c) => s + c.costo, 0);
+  assert.ok(Math.abs(plan.total - caja) < 0.02, `${plan.total} vs ${caja}`);
+});
+
+test('repetir para ahorrar: repite proteína y no gasta más que el modo normal', () => {
+  const base = { adultos: 3, comidas: { desayuno: { dias: SEMANA }, almuerzo: { dias: SEMANA }, cena: { dias: SEMANA } }, presupuestoMin: 60, presupuestoMax: 120 };
+  const normal = planificar({ perfil: base, precios, semilla: 4 });
+  const ahorro = planificar({ perfil: { ...base, repetirParaAhorrar: true }, precios, semilla: 4 });
+  assert.ok(ahorro.total <= normal.total + 0.01, `${ahorro.total} > ${normal.total}`);
+  const prot = (pl) => Math.max(...Object.values(pl.slots.filter((s) => s.comida !== 'desayuno').reduce((m, s) => ({ ...m, [receta(s.recetaId).proteina]: (m[receta(s.recetaId).proteina] || 0) + 1 }), {})));
+  assert.ok(prot(ahorro) >= prot(normal), 'con "repetir para ahorrar" la proteína más usada no debería salir menos veces');
+});

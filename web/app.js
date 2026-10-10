@@ -680,9 +680,12 @@ async function vistaMenu(v) {
     <section class="tarjeta reco menu-cab" style="margin-top:8px">
       <div class="eti">Semana del ${esc(fechaCorta(m.semana))} · ${esc(comidasTxt)}</div>
       <div class="monto precio">${dinero(plan.total)}</div>
-      <div class="razon">${plan.total > rango.max + 0.01
-        ? `a comprar: ${dinero(plan.total - rango.max)} arriba de tu máximo de ${dinero(rango.max)}. Sube el rango o marca "Lo más económico".`
-        : `a comprar · tu rango ${rango.sugerido ? 'sugerido ' : ''}es ${dinero(rango.min)}–${dinero(rango.max)}`}</div>
+      <div class="razon">${plan.imposible
+        ? `<b class="fuera">Con estas comidas y filtros, lo menos que se puede gastar es ${dinero(plan.minimoPosible)}</b>: sube el máximo (${dinero(rango.max)}), quita alguna comida o algún filtro.`
+        : !plan.dentroPresupuesto
+          ? `<b class="fuera">Fuera de tu rango de ${dinero(rango.min)}–${dinero(rango.max)}</b> (los precios cambiaron o elegiste platos a mano).`
+          : `a comprar · tu rango ${rango.sugerido ? 'sugerido ' : ''}es ${dinero(rango.min)}–${dinero(rango.max)}`}</div>
+      ${!plan.dentroPresupuesto && !plan.imposible ? '<button class="btn-primario" id="ajustar-rango" style="margin-top:10px;width:100%">Ajustar a mi presupuesto</button>' : ''}
       <div class="rango-barra" aria-hidden="true"><i style="left:${Math.max(0, Math.min(100, ((plan.total - rango.min) / Math.max(1, rango.max - rango.min)) * 100))}%"></i></div>
       ${presentes.length > 1 ? `<div class="reparto-comidas">${presentes.map((c) => `<span>${esc(CORTO[c])} <b class="precio">${dinero(plan.porComida[c])}</b></span>`).join('')}</div>` : ''}
       ${plan.estimado ? '<span class="ahorro">Algunos precios son estimados</span>' : ''}
@@ -767,6 +770,9 @@ async function vistaMenu(v) {
     $('.cambiar', el).onclick = () => cambiarAlAzar(slot);
   });
   $('#otro').onclick = () => generarMenu({ semilla: (m.guardado.semilla || 0) + 1 });
+  // rehace solo lo que no se ha cocinado, para volver al rango
+  $('#ajustar-rango')?.addEventListener('click', () => generarMenu({ semilla: m.guardado.semilla || 1,
+    fijos: Object.fromEntries(m.guardado.slots.filter((x) => cocinados.has(claveSlot(x.dia, x.comida))).map((x) => [claveSlot(x.dia, x.comida), x.recetaId])) }));
   $('#prefs').onclick = () => hojaPerfil();
   $('#mis-recetas').onclick = abrirMisRecetas;
   $('#ideas-ia')?.addEventListener('click', () => abrirIdeasIA({ tiempo: 'almuerzo', contexto: contextoIA }));
@@ -990,6 +996,7 @@ function formularioPerfil(cont, { inicial }) {
       <h4>Filtros</h4>
       <label class="interruptor"><input type="checkbox" id="sin-fritos" ${p.sinFritos ? 'checked' : ''}><span>Sin frituras</span></label>
       <label class="interruptor"><input type="checkbox" id="solo-conocidos" ${p.soloConocidos ? 'checked' : ''}><span>Solo platos muy conocidos</span></label>
+      <label class="interruptor"><input type="checkbox" id="repetir-ahorrar" ${p.repetirParaAhorrar ? 'checked' : ''}><span>Prefiero repetir ingredientes para ahorrar<br><span class="unit">Ej. pollo varios días en vez de comprar de todo un poco. Apunta a la parte baja del rango.</span></span></label>
       <h4>Además de la estufa, ¿qué tienes?</h4>
       ${chips('aparatos', APARATOS, p.aparatos)}
       <h4>No me gusta / no comemos</h4>
@@ -1098,6 +1105,7 @@ function formularioPerfil(cont, { inicial }) {
     delete p.presupuesto;
     p.sinFritos = $('#sin-fritos', cont).checked;
     p.soloConocidos = $('#solo-conocidos', cont).checked;
+    p.repetirParaAhorrar = $('#repetir-ahorrar', cont).checked;
     p.sobras = $('#sobras', cont).value;
     ev.currentTarget.disabled = true;
     try {

@@ -499,3 +499,4 @@ details.bien[open] summary::after { content: " ▴"; }
 .fila-agro { display: flex; flex-direction: column; gap: 3px; width: 100%; text-align: left; padding: 12px 14px; background: none; border: 0; border-bottom: 1px solid var(--linea); color: inherit; font: inherit; }
 .fila-agro:last-child { border-bottom: 0; }
 .fila-agro .n { font-weight: 650; }
+.razon .fuera { color: var(--crimson); }
