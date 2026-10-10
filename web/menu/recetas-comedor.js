@@ -75,26 +75,27 @@ export const COMEDOR = [
     ],
   },
   {
-    id: 'bistec-encebollado', nombre: 'Bistec encebollado con arroz y frijoles', minutos: 35, porciones: 4, tiempos: ['almuerzo', 'cena'],
+    id: 'bistec-encebollado', nombre: 'Bistec encebollado con arroz y ensalada', minutos: 35, porciones: 4, tiempos: ['almuerzo', 'cena'],
     aparatos: ['estufa'], etiquetas: ['tradicional', 'comedor'], proteina: 'res', popularidad: 5,
-    ing: [['res_posta', 700], ['cebolla', 300], ['arroz', 300], ['frijol', 250], ['aceite', 40], ['tortillas', 12], ['salsa_inglesa', 1], ['ajo', 3]],
+    ing: [['res_posta', 700], ['cebolla', 300], ['arroz', 300], ['lechuga', 1], ['tomate', 150], ['limon', 2], ['aceite', 40], ['tortillas', 12], ['salsa_inglesa', 1], ['ajo', 3]],
     pasos: [
       'Sazona los bistecs con sal, pimienta, ajo y salsa inglesa.',
       'Dóralos en sartén caliente con un poco de aceite, 3–4 min por lado. Retira.',
       'En el mismo sartén cocina la cebolla en aros hasta que esté suave; regresa la carne y tapa 5 min.',
-      'Sirve con arroz, frijoles y tortillas.',
+      'Sirve con arroz, ensalada de lechuga y tomate con limón, y tortillas.',
     ],
   },
   {
-    id: 'carne-asada', nombre: 'Carne asada con chirmol, frijoles y tortillas', minutos: 45, porciones: 4, tiempos: ['almuerzo', 'cena'],
+    id: 'carne-asada', nombre: 'Carne asada con chirmol, casamiento y tortillas', minutos: 45, porciones: 4, tiempos: ['almuerzo', 'cena'],
     aparatos: ['estufa'], etiquetas: ['tradicional', 'comedor', 'finde'], proteina: 'res', popularidad: 5,
-    ing: [['res_posta', 800], ['tomate', 300], ['cebolla', 150], ['chile_verde', 1], ['cilantro', 1], ['limon', 4], ['frijol', 250],
+    ing: [['res_posta', 800], ['tomate', 300], ['cebolla', 150], ['chile_verde', 1], ['cilantro', 1], ['limon', 4], ['frijol', 250], ['arroz', 200],
       ['aguacate', 2], ['tortillas', 16], ['ajo', 3], ['salsa_inglesa', 1]],
     pasos: [
       'Marina la carne con limón, ajo, salsa inglesa, sal y pimienta (mejor 1 hora).',
       'Chirmol: asa tomate, cebolla y chile en el comal; pícalos fino y mezcla con cilantro, limón y sal.',
       'Asa la carne en plancha o parrilla bien caliente, 4–5 min por lado.',
-      'Sirve con frijoles, aguacate, chirmol y tortillas calientes.',
+      'Casamiento: revuelve arroz cocido con frijoles cocidos y cebolla sofrita.',
+      'Sirve con casamiento, aguacate, chirmol y tortillas calientes.',
     ],
   },
   {

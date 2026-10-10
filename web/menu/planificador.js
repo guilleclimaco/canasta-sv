@@ -506,6 +506,13 @@ export function planificar({
     if (t === 'desayuno' && !finDeSemana && r.minutos > 25) p += 0.8;
     if (t === 'desayuno') p += Math.max(0, (familias.get(familia(r)) || 0) - 1) * 1.5; // "huevos picados" 5 días, no
     if ((r.etiquetas || []).includes('finde')) p += finDeSemana ? -0.6 : 0.8; // carne asada, tamales: mejor el fin de semana
+    // costumbres de la semana: pupusas el sábado en la noche; domingo, tamales o pupusas de desayuno y sopa o
+    // carne asada de almuerzo; entre semana el desayuno es rápido (pupusas y tamales, mejor el fin de semana)
+    const fam = familia(r);
+    if (s.dia === 'sab' && s.comida === 'cena' && fam === 'pupusas') p -= 1.8;
+    if (s.dia === 'dom' && t === 'desayuno' && (fam === 'pupusas' || fam === 'tamales' || r.id === 'desayuno-tipico')) p -= 1;
+    if (s.dia === 'dom' && t === 'almuerzo' && (fam === 'sopa' || /carne-asada|costilla|chumpe|pavo/.test(r.id))) p -= 0.9;
+    if (!finDeSemana && t === 'desayuno' && (fam === 'pupusas' || fam === 'tamales')) p += 1;
     // balance: que cada día tenga verdura o fruta
     if (!verduraDia.has(s.dia) && tieneVerdura(r)) p -= ultimaDelDia.get(s.dia) === claveSlot(s.dia, s.comida) ? 1.2 : 0.3;
     // usar primero lo que está por vencer
@@ -543,8 +550,8 @@ export function planificar({
     if (!finalistas.has(k)) {
       const c = candidatasPara(s).filter((r) => calificaciones[r.id] !== -1);
       const porGusto = [...c].sort((x, y) => gustoDe.get(y.id) - gustoDe.get(x.id)).slice(0, 90);
-      const porPrecio = [...c].sort((x, y) => costo(x, 4).porPorcion - costo(y, 4).porPorcion).slice(0, 90);
-      finalistas.set(k, [...new Set([...porGusto, ...porPrecio])]);
+      const porPrecio = [...c].sort((x, y) => costo(x, 4).porPorcion - costo(y, 4).porPorcion);
+      finalistas.set(k, [...new Set([...porGusto, ...porPrecio.slice(0, 90), ...porPrecio.slice(-60)])]);
     }
     return finalistas.get(k);
   };
@@ -594,8 +601,8 @@ export function planificar({
           valor = (dG - ((r.popularidad ?? 3) <= 2 ? 1.5 : 0)) / -d;
         } else {
           if (d < 0.01 || total + d > rango.max) continue;
-          if (dG < -0.5) continue; // no "mejorar" a un plato que gusta menos
-          valor = dG + Math.min(d, rango.min - total) * 0.3;
+          // primero cambios que no bajan el gusto; si no hay, el que pierde menos gusto por dólar (el mínimo es obligatorio)
+          valor = dG >= -0.5 ? 1000 + dG + Math.min(d, rango.min - total) * 0.3 : dG / d;
         }
         if (!mejor || valor > mejor.valor) mejor = { k, r, valor, d };
       }
@@ -636,6 +643,10 @@ export function planificar({
     // ni con lo más barato que cumple tus filtros alcanza: decirlo claro
     plan.imposible = true;
     plan.minimoPosible = plan.total;
+  } else if (plan.total < rango.min - 0.01 && !estilos.has('economico')) {
+    // ni con los platos más completos se llega al mínimo (pocas comidas para ese presupuesto)
+    plan.imposible = true;
+    plan.maximoPosible = plan.total;
   }
   plan.presupuesto = rango;
   plan.porVencer = porVencer(desp, hoy);

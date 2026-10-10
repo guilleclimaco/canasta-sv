@@ -150,12 +150,12 @@ const ALMUERZOS = [
     id: 'salpicon', nombre: 'Salpicón de res', minutos: 60, porciones: 4,
     aparatos: ['estufa'], etiquetas: ['tradicional', 'saludable'], proteina: 'res',
     ing: [['res_posta', 600], ['cebolla', 150], ['rabano', 1], ['hierbabuena', 1], ['limon', 4], ['arroz', 300],
-      ['frijol', 300], ['tortillas', 12]],
+      ['aguacate', 1], ['tortillas', 12]],
     pasos: [
       'Cuece la carne con sal y media cebolla 40 min; déjala enfriar y pícala muy fina (o en procesador).',
       'Pica finito cebolla, rábano y hierbabuena; mézclalos con la carne.',
       'Sazona con jugo de limón y sal.',
-      'Sirve frío o a temperatura ambiente con arroz, frijoles y tortillas.',
+      'Sirve frío o a temperatura ambiente con arroz, aguacate y tortillas.',
     ],
   },
   {
@@ -324,12 +324,12 @@ const ALMUERZOS = [
   {
     id: 'chuletas-cerdo', nombre: 'Chuletas de cerdo encebolladas', minutos: 30, porciones: 4,
     aparatos: ['estufa'], etiquetas: ['rapido'], proteina: 'cerdo',
-    ing: [['chuleta_cerdo', 700], ['cebolla', 150], ['ajo', 3], ['limon', 2], ['aceite', 20], ['arroz', 300], ['frijol', 300], ['aguacate', 1]],
+    ing: [['chuleta_cerdo', 700], ['cebolla', 150], ['ajo', 3], ['limon', 2], ['aceite', 20], ['arroz', 300], ['lechuga', 1], ['tomate', 150], ['aguacate', 1]],
     pasos: [
       'Sazona las chuletas con limón, ajo, sal y pimienta.',
       'Cocínalas en sartén con aceite 5–6 min por lado.',
       'En el mismo sartén cocina la cebolla en aros hasta dorar y ponla encima.',
-      'Sirve con arroz, frijoles y aguacate.',
+      'Sirve con arroz, ensalada de lechuga y tomate, y aguacate.',
     ],
   },
   {
@@ -358,12 +358,12 @@ const TAMBIEN = {
   'panes-con-pollo': ['cena'],
   'coditos-salchicha': ['cena'],
   'hamburguesas': ['cena'],
-  'pechuga-plancha': ['cena'],
   'tortitas-de-atun': ['cena'],
-  'espagueti-bolonesa': ['cena'],
   'frijoles-con-chorizo': ['cena', 'desayuno'],
 };
 for (const r of ALMUERZOS) r.tiempos = ['almuerzo', ...(TAMBIEN[r.id] || [])];
+// huevos con frijoles es desayuno o cena, no almuerzo
+for (const r of ALMUERZOS) if (r.id === 'huevos-picados') r.tiempos = r.tiempos.filter((t) => t !== 'almuerzo');
 
 // Qué tan común es el plato en casas y comedores salvadoreños: 5 = en todos lados, 1 = raro.
 // El planificador prefiere los conocidos; el costo solo cuenta para acomodarse al presupuesto.
@@ -408,6 +408,10 @@ const NO_SOBRAS = new Set(['tacos-de-pollo', 'tilapia-frita', 'hamburguesas', 'p
   'pupusas-revueltas', 'pupusas-loroco', 'pollo-empanizado', 'huevos-entomatados', 'carne-asada', 'yuca-sancochada']);
 for (const r of RECETAS) {
   r.popularidad ??= POPULARIDAD[r.id] ?? 3;
+  // los platos de comedor (carne con arroz) son almuerzo; de cena quedan los de huevo, embutido, verdura y antojitos
+  if (COMEDOR.includes(r) && !['huevo', 'vegetal', 'embutido'].includes(r.proteina) && !/^(pupusas|tamales|pan-con|yuca)/.test(r.id)) {
+    r.tiempos = r.tiempos.filter((t) => t !== 'cena');
+  }
   // dos pupusas, dos sopas o dos tamales en la semana cuentan como repetir plato
   const fam = /^(pupusas|sopa|tamales)/.exec(r.id);
   if (fam) r.familia = fam[1];

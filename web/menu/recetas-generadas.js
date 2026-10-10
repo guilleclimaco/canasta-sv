@@ -51,7 +51,7 @@ const COMBINA = {
   pescado: { bases: ['arroz', 'papas_fritas', 'yuca', 'arroz_verduras', 'casamiento'],
     comps: ['ensalada_repollo', 'ensalada_verde', 'aguacate', 'ensalada_pepino', 'chirmol', 'platano'] },
 };
-const MAX_COMBOS = 28;
+const MAX_COMBOS = 37;
 
 // ------------------------------------------------------------------ proteínas
 // g: m | f | mp | fp (género y número, para "encebollado/a/os/as"); el: con artículo, para los pasos
@@ -441,6 +441,11 @@ const TIPICOS = [
   pupusa('chorizo', 'chorizo con queso', [['chorizo', 250], ['quesillo', 300]], 'embutido', 4),
   pupusa('frijol', 'frijol', [['frijol', 400]], 'vegetal', 4, ['vegetariano', 'economico']),
   pupusa('ayote-loroco', 'loroco, ayote y queso', [['loroco', 80], ['ayote', 200], ['quesillo', 300]], 'vegetal', 3, ['vegetariano']),
+  ...[['queso', 'queso', [['quesillo', 450]], 'vegetal'], ['frijol-queso', 'frijol con queso', [['frijol', 250], ['quesillo', 250]], 'vegetal'],
+    ['chicharron', 'chicharrón con queso', [['chicharron', 250], ['quesillo', 200]], 'cerdo'], ['loroco', 'queso con loroco', [['quesillo', 400], ['loroco', 80]], 'vegetal']]
+    .map(([id, n, rel, prot]) => T(`pupusas-arroz-${id}`, `Pupusas de arroz de ${n}, con curtido`, 60, prot, 4, ['tradicional'],
+      [['harina_arroz', 600], ['aceite', 30], ...rel, ...CURTIDO],
+      ['Prepara el curtido.', 'Haz la masa de arroz con agua tibia y sal; rellena y aplana.', 'Cocina en comal y sirve con curtido y salsa de tomate.'], ['cena', 'almuerzo', 'desayuno'])),
   pupusa('arroz', 'masa de arroz revueltas', [['harina_arroz', 300], ['chicharron', 200], ['quesillo', 200], ['frijol', 150]], 'cerdo', 4),
   ...[['aguacate', 'aguacate', [['aguacate', 3], ['queso_duro', 80], ['tomate', 150]], 'vegetal', 5, ['vegetariano', 'rapido', 'economico'],
     'Abre el pan, unta aguacate machacado con sal y limón, y agrega tomate en rodajas y queso duro rallado.'],
@@ -483,6 +488,28 @@ const TIPICOS = [
   T('quesadillas-tortilla-loroco', 'Tortillas con quesillo y loroco', 15, 'vegetal', 4, ['rapido', 'vegetariano'],
     [['tortillas', 12], ['quesillo', 300], ['loroco', 60], ['frijol', 200]],
     ['Calienta las tortillas en comal.', 'Rellénalas de quesillo y loroco y dóblalas hasta que el queso se derrita.', 'Sirve con frijoles.'], ['cena', 'desayuno', 'refaccion']),
+  // cena típica sin huevo: frijoles con lo que haya, con tortillas o pan
+  ...[['crema-queso', 'crema y queso duro', [['crema', 150], ['queso_duro', 100]], 'vegetal', 5],
+    ['chorizo', 'chorizo', [['chorizo', 250]], 'embutido', 4], ['chicharron', 'chicharrón', [['chicharron', 250]], 'cerdo', 4],
+    ['aguacate', 'aguacate y queso fresco', [['aguacate', 2], ['queso_fresco', 150]], 'vegetal', 4],
+    ['quesillo', 'quesillo y plátano', [['quesillo', 200], ['platano', 2], ['aceite', 60]], 'vegetal', 4],
+    ['salchicha', 'salchicha y plátano', [['salchicha', 250], ['platano', 2], ['aceite', 60]], 'embutido', 4]]
+    .flatMap(([id, n, ing, prot, pop]) => [['tortillas', 'tortillas', [['tortillas', 12]]], ['pan', 'pan francés', [['pan_frances', 4]]]].map(([pid, pn, ping]) =>
+      T(`cena-frijoles-${id}-${pid}`, `Frijoles volteados con ${n} y ${pn}`, 20, prot, pop, ['tradicional', 'rapido'],
+        [['frijol', 300], ['aceite', 30], ...ing, ...ping], ['Voltea los frijoles cocidos en aceite con un poco de cebolla.', `Sirve con ${n} y ${pn} calientes.`], ['cena', 'desayuno']))),
+  // enchiladas, pasteles y tacos: antojitos de la noche
+  ...[['pollo', 'pollo', [['pechuga', 300]], 'pollo'], ['huevo', 'huevo', [['huevo', 4]], 'huevo'], ['frijol', 'frijol y queso', [['frijol', 300], ['queso_duro', 80]], 'vegetal']]
+    .map(([id, n, ing, prot]) => T(`enchiladas-${id}`, `Enchiladas de ${n}`, 35, prot, 4, ['tradicional', 'frito'],
+      [['tostadas', 12], ...ing, ['repollo', 0.5], ['zanahoria', 100], ['tomate', 300], ['queso_duro', 60], ['vinagre', 1]],
+      ['Prepara curtido con repollo y zanahoria, y una salsa de tomate cocida.', `Sobre cada tostada pon ${n}, curtido, salsa y queso duro rallado.`], ['cena', 'refaccion'])),
+  ...[['pollo', 'pollo', [['pechuga', 300]], 'pollo'], ['papa', 'papa', [['papa', 400]], 'vegetal'], ['chorizo', 'chorizo y papa', [['chorizo', 200], ['papa', 250]], 'embutido']]
+    .map(([id, n, ing, prot]) => T(`pastelitos-${id}`, `Pastelitos de ${n} con curtido`, 60, prot, 4, ['tradicional', 'frito'],
+      [['harina_maiz', 500], ...ing, ['aceite', 300], ['achiote', 1], ['repollo', 0.5], ['zanahoria', 100], ['tomate', 200], ['vinagre', 1]],
+      ['Haz la masa con harina, agua, sal y achiote.', `Rellena con ${n} cocido en cubitos, dobla en media luna y fríe.`, 'Sirve con curtido y salsa de tomate.'], ['cena', 'refaccion'])),
+  ...[['res', 'carne', [['res_posta', 400]], 'res'], ['cerdo', 'cerdo', [['carne_cerdo', 400]], 'cerdo'], ['papa', 'papa', [['papa', 500]], 'vegetal'], ['chorizo', 'chorizo', [['chorizo', 300]], 'embutido']]
+    .map(([id, n, ing, prot]) => T(`tacos-cena-${id}`, `Tacos de ${n} con curtido y salsa`, 35, prot, 4, ['tradicional', 'frito'],
+      [['tortillas', 16], ...ing, ['aceite', 150], ['repollo', 0.5], ['zanahoria', 80], ['tomate', 250], ['vinagre', 1]],
+      ['Cocina el relleno sazonado y desmenúzalo o pícalo.', 'Rellena las tortillas, enróllalas y fríelas hasta dorar.', 'Sirve con curtido y salsa de tomate.'], ['cena', 'refaccion'])),
   T('nachos', 'Nachos con frijoles y queso', 20, 'vegetal', 3, ['rapido', 'ninos'],
     [['tostadas', 20], ['frijol', 300], ['queso_amarillo', 200], ['tomate', 150], ['aguacate', 1], ['jalapeno', 40]],
     ['Unta los totopos o tostadas con frijoles.', 'Cubre con queso y caliéntalos hasta que se derrita.', 'Termina con tomate, aguacate y jalapeño.'], ['cena', 'refaccion']),
@@ -507,6 +534,9 @@ const HUEVOS = {
   ahogados: { n: 'Huevos ahogados en salsa', ing: [['huevo', 8], ['tomate', 400], ['cebolla', 80], ['chile_verde', 1], ['cilantro', 1]], paso: 'Cocina una salsa de tomate, cebolla y chile y quiebra los huevos dentro; tapa hasta que cuajen.', min: 20, pop: 4 },
   tomate_queso: { n: 'Huevos revueltos con tomate y queso', ing: [['huevo', 8], ['tomate', 150], ['queso_fresco', 120], ['aceite', 15]], paso: 'Sofríe el tomate, agrega los huevos y al final el queso desmoronado.', min: 12, pop: 4 },
   papa: { n: 'Huevos con papa', ing: [['huevo', 8], ['papa', 300], ['cebolla', 60], ['aceite', 30]], paso: 'Dora la papa en cubitos con cebolla y agrega los huevos batidos.', min: 20, pop: 4 },
+  chirmol: { n: 'Huevos estrellados con chirmol', ing: [['huevo', 8], ['tomate', 250], ['cebolla', 80], ['cilantro', 1], ['limon', 1], ['aceite', 20]], paso: 'Fríe los huevos y báñalos con chirmol de tomate, cebolla y cilantro con limón.', min: 15, pop: 4 },
+  ayote: { n: 'Huevos revueltos con ayote', ing: [['huevo', 8], ['ayote', 250], ['cebolla', 60], ['aceite', 20]], paso: 'Sofríe el ayote en cubitos con cebolla y agrega los huevos batidos.', min: 15, pop: 3 },
+  quesillo: { n: 'Huevos revueltos con quesillo', ing: [['huevo', 8], ['quesillo', 120], ['aceite', 15]], paso: 'Revuelve los huevos y al final agrega el quesillo para que se derrita.', min: 10, pop: 4 },
   hongos: { n: 'Omelette de champiñones', ing: [['huevo', 8], ['champinones', 150], ['queso_amarillo', 80], ['margarina', 20]], paso: 'Saltea los champiñones, cuaja el huevo encima, agrega queso y dobla.', min: 15, pop: 3 },
 };
 const ACOMP_DESAYUNO = [
@@ -520,6 +550,8 @@ const ACOMP_DESAYUNO = [
   ['tostado', 'pan tostado', [['pan_molde', 300], ['margarina', 30]], 'Sirve con pan tostado con margarina.', 5],
   ['queso-fresco', 'frijoles y queso fresco', [['frijol', 250], ['queso_fresco', 150], ['tortillas', 12], ['aceite', 20]], 'Sirve con frijoles volteados, queso fresco y tortillas.', 5],
   ['frijoles-crema', 'frijoles, crema y aguacate', [['frijol', 250], ['crema', 120], ['aguacate', 1], ['tortillas', 12], ['aceite', 20]], 'Sirve con frijoles, crema, aguacate y tortillas.', 5],
+  ['casamiento-platano', 'casamiento y plátano', [['arroz', 200], ['frijol', 200], ['platano', 2], ['cebolla', 40], ['aceite', 60], ['tortillas', 8]], 'Sirve con casamiento, plátano frito y tortillas.', 15],
+  ['pan-crema-queso', 'pan francés, crema y queso', [['pan_frances', 4], ['crema', 120], ['queso_duro', 80]], 'Sirve con pan francés, crema y queso duro.', 5],
   ['pan-aguacate', 'pan francés y aguacate', [['pan_frances', 4], ['aguacate', 2]], 'Sirve con pan francés y aguacate machacado con sal y limón.', 5],
 ];
 const OTROS_DESAYUNOS = [
@@ -629,9 +661,21 @@ function juntar(...listas) {
   return [...m];
 }
 
+// Cómo se come en El Salvador:
+//  - almuerzo = el plato fuerte del día (carne con arroz y ensalada, sopa); casamiento sí, frijoles solos no.
+//  - cena = más liviana, como el desayuno (huevos, frijoles, plátano, crema, queso) o antojitos (pupusas, panes,
+//    tamales). Un plato de comedor con carne y arroz no es cena; los de huevo, embutido o verdura sí pueden serlo.
+const CENA_LIGERA = ['huevo', 'embutido', 'vegetal'];
+const SOPA_PESADA = /pata|mondongo|mariscos|costilla|gallina|caldo/;
+
 function conLados(plato) {
+  const cenaLigera = CENA_LIGERA.includes(plato.proteina);
+  const tiemposBase = plato.tiempos
+    || (plato.lados === 'sopa' ? (SOPA_PESADA.test(plato.id) ? ['almuerzo'] : ['almuerzo', 'cena'])
+      : ['pasta', 'arroz'].includes(plato.lados) || !plato.lados ? ['almuerzo']
+        : cenaLigera ? ['almuerzo', 'cena'] : ['almuerzo']);
   const base = { porciones: 4, aparatos: plato.aparatos || ['estufa'], proteina: plato.proteina, familia: plato.id, tecnica: plato.tecnica,
-    tiempos: plato.tiempos || ['almuerzo', 'cena'] };
+    tiempos: tiemposBase };
   const etiquetas = (extra = []) => [...new Set([...plato.etiquetas, ...extra])];
   const tortillas = plato.tortillas === false ? [] : [['tortillas', 12]];
   const out = [];
@@ -670,7 +714,10 @@ function conLados(plato) {
     // freír el plato y también su acompañamiento es demasiado: se evita doble fritura con papas fritas
     if (plato.etiquetas.includes('frito') && b === 'papas_fritas' && cp === 'platano') continue;
     if (b === 'arroz_verduras' && ['vegetales', 'ejotes'].includes(cp)) continue;
-    out.push({ ...base, id: `${plato.id}--${b}-${cp}`.replace(/_/g, '-'), nombre: plato.nombre.includes(' con ') ? `${plato.nombre}, ${lb.n} y ${lc.n}` : `${plato.nombre} con ${lb.n} y ${lc.n}`,
+    // frijoles "porque sí" en el almuerzo no: con frijoles solo queda como cena (y solo si el plato es de cena)
+    const tiempos = [b, cp].some((x) => ['frijoles', 'frijoles_olla'].includes(x)) ? base.tiempos.filter((t) => t !== 'almuerzo') : base.tiempos;
+    if (!tiempos.length) continue;
+    out.push({ ...base, tiempos, id: `${plato.id}--${b}-${cp}`.replace(/_/g, '-'), nombre: plato.nombre.includes(' con ') ? `${plato.nombre}, ${lb.n} y ${lc.n}` : `${plato.nombre} con ${lb.n} y ${lc.n}`,
       minutos: Math.max(plato.min, lb.min) + 5, etiquetas: etiquetas([...(lb.et || []), ...(lc.et || []), 'lonchera'].filter((e) => e !== 'lonchera' || plato.etiquetas.includes('lonchera'))),
       popularidad: Math.max(1, plato.popularidad - (['pure', 'yuca', 'ejotes'].includes(b) || cp === 'ejotes' ? 1 : 0)),
       ing: juntar(plato.ing, lb.ing, lc.ing, tortillas),
@@ -683,7 +730,7 @@ function desayunosDeHuevo() {
   const out = [];
   for (const [hk, h] of Object.entries(HUEVOS)) {
     for (const [ak, an, aing, apaso, amin] of ACOMP_DESAYUNO) {
-      out.push({ id: `des-${hk}-${ak}`, nombre: h.n.includes(' con ') ? `${h.n}, ${an}` : `${h.n} con ${an}`, minutos: h.min + amin, porciones: 4, tiempos: ['desayuno', ...(ak === 'tipico' ? ['cena'] : [])],
+      out.push({ id: `des-${hk}-${ak}`, nombre: h.n.includes(' con ') ? `${h.n}, ${an}` : `${h.n} con ${an}`, minutos: h.min + amin, porciones: 4, tiempos: ['desayuno', 'cena'],
         aparatos: ['estufa'], etiquetas: ['tradicional', ...(h.min + amin <= 25 ? ['rapido'] : [])], proteina: h.prot || 'huevo',
         popularidad: Math.max(2, h.pop - (['tostado', 'aguacate'].includes(ak) ? 1 : 0)), familia: `des-${hk}`,
         ing: juntar(h.ing, aing), pasos: [h.paso, apaso] });
