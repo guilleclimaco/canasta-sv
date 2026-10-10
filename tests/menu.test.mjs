@@ -119,7 +119,8 @@ test('slots: cualquier combinación de comidas y días, con personas por comida'
   assert.equal(s.find((x) => x.comida === 'almuerzo').porciones, 1);
   assert.equal(s.find((x) => x.comida === 'desayuno').porciones, 2);
   assert.equal(s.at(-1).dia, 'dom');
-  assert.ok(presupuestoSugerido(perfil) > 0);
+  const sug = presupuestoSugerido(perfil);
+  assert.ok(sug.min > 0 && sug.max > sug.min);
   for (const [, , comidas] of PRESETS) assert.ok(slotsDe({ adultos: 1, comidas: Object.fromEntries(Object.entries(comidas).map(([k, d]) => [k, { dias: d }])) }).length > 0);
 });
 
@@ -218,4 +219,54 @@ test('costo por porción razonable en cada tipo de comida', () => {
   assert.equal(cantidadTexto(1814, 'g'), '1.8 kg (4 lb)');
   assert.equal(cantidadTexto(250, 'ml'), '250 ml');
   assert.equal(cantidadTexto(1.5, 'und'), '1½');
+});
+
+test('presupuesto como rango: más presupuesto no da un menú más barato, y respeta el máximo', () => {
+  const comidas = { almuerzo: { dias: LV } };
+  const sug = presupuestoSugerido({ adultos: 2, comidas });
+  const bajo = planificar({ perfil: { adultos: 2, comidas, presupuestoMin: sug.min, presupuestoMax: sug.max }, precios, semilla: 4 });
+  const alto = planificar({ perfil: { adultos: 2, comidas, presupuestoMin: sug.max, presupuestoMax: sug.max * 2 }, precios, semilla: 4 });
+  assert.ok(alto.total >= bajo.total, `${alto.total} < ${bajo.total}`);
+  assert.ok(bajo.total <= sug.max + 0.01, `se pasó del máximo: ${bajo.total} > ${sug.max}`);
+  assert.deepEqual([alto.presupuesto.min, alto.presupuesto.max], [sug.max, sug.max * 2]);
+});
+
+test('prefiere platos conocidos: casi sin platos raros con presupuesto normal', () => {
+  const plan = planificar({ perfil: { adultos: 2, comidas: TODO }, precios, semilla: 9 });
+  const raras = plan.slots.filter((s) => receta(s.recetaId).popularidad <= 2);
+  assert.ok(raras.length <= 2, `platos raros: ${raras.map((s) => s.recetaId).join(', ')}`);
+  const almuerzos = plan.slots.filter((s) => s.comida === 'almuerzo').map((s) => receta(s.recetaId).proteina);
+  const maxMisma = Math.max(...Object.values(almuerzos.reduce((m, p) => ({ ...m, [p]: (m[p] || 0) + 1 }), {})));
+  assert.ok(maxMisma <= 3, `misma proteína ${maxMisma} veces en 7 almuerzos`);
+});
+
+test('filtros: sin frituras, solo conocidos, tiempo máximo entre semana y proteínas evitadas', () => {
+  const base = { adultos: 2, comidas: TODO };
+  const plan = planificar({ perfil: { ...base, sinFritos: true, soloConocidos: true, tiempoMax: 45, evitar: ['cerdo'] }, precios, semilla: 5 });
+  assert.ok(!plan.error, plan.error);
+  for (const s of plan.slots) {
+    const r = receta(s.recetaId);
+    assert.ok(!r.etiquetas.includes('frito'), `${r.id} es frito`);
+    assert.ok(r.popularidad >= 4, `${r.id} no es conocido`);
+    assert.notEqual(r.proteina, 'cerdo', `${r.id} lleva cerdo`);
+    if (!['sab', 'dom'].includes(s.dia)) assert.ok(r.minutos <= 45, `${r.id} tarda ${r.minutos} min entre semana`);
+  }
+  assert.ok(recetasPosibles({ ...base, tiempoMax: 30 }, 'almuerzo', 'sab').some((r) => r.minutos > 30), 'el fin de semana no aplica el tiempo máximo');
+});
+
+test('perfil viejo con un solo presupuesto: pasa a rango y quita "Económico" que venía por defecto', () => {
+  const p = normalizarPerfil({ presupuesto: 40, estilos: ['economico', 'tradicional'] });
+  assert.deepEqual([p.presupuestoMin, p.presupuestoMax], [30, 40]);
+  assert.deepEqual(p.estilos, ['tradicional']);
+  assert.equal(p.presupuesto, undefined);
+});
+
+test('recetario de comedor: platos típicos con popularidad y etiquetas', () => {
+  for (const id of ['pollo-dorado', 'bistec-encebollado', 'carne-asada', 'pupusas-revueltas', 'sopa-de-gallina', 'tamales-pollo']) {
+    assert.ok(receta(id), id);
+    assert.ok(receta(id).popularidad >= 4, id);
+  }
+  for (const r of RECETAS) assert.ok(r.popularidad >= 1 && r.popularidad <= 5, `${r.id}: popularidad`);
+  assert.ok(receta('pollo-dorado').etiquetas.includes('frito'));
+  assert.ok(receta('tilapia-frita').etiquetas.includes('frito'));
 });

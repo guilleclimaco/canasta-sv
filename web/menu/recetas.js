@@ -10,6 +10,7 @@
 import { DESAYUNOS } from './recetas-desayunos.js';
 import { CENAS } from './recetas-cenas.js';
 import { REFACCIONES } from './recetas-refacciones.js';
+import { COMEDOR } from './recetas-comedor.js';
 
 const ALMUERZOS = [
   {
@@ -362,4 +363,30 @@ const TAMBIEN = {
 };
 for (const r of ALMUERZOS) r.tiempos = ['almuerzo', ...(TAMBIEN[r.id] || [])];
 
-export const RECETAS = [...ALMUERZOS, ...DESAYUNOS, ...CENAS, ...REFACCIONES];
+// Qué tan común es el plato en casas y comedores salvadoreños: 5 = en todos lados, 1 = raro.
+// El planificador prefiere los conocidos; el costo solo cuenta para acomodarse al presupuesto.
+const POPULARIDAD = {
+  'pollo-guisado': 5, 'arroz-con-pollo': 4, 'sopa-de-res': 5, 'carne-guisada': 5, 'huevos-picados': 4,
+  'frijoles-con-chorizo': 4, 'tortas-de-papa': 3, 'tortas-de-guisquil': 3, 'pollo-encebollado': 4,
+  'espagueti-bolonesa': 4, 'chiles-rellenos': 4, salpicon: 4, 'tilapia-frita': 4, 'pollo-en-crema': 4,
+  'arroz-frito': 3, 'tacos-de-pollo': 4, 'sopa-de-frijoles': 3, 'lentejas-guisadas': 2, 'pechuga-plancha': 3,
+  picadillo: 4, 'tortitas-de-atun': 3, pupusas: 5, 'panes-con-pollo': 4, 'coditos-salchicha': 3,
+  'pollo-horno-papas': 3, 'alitas-freidora': 3, 'chuletas-cerdo': 4, hamburguesas: 3,
+  'desayuno-tipico': 5, 'huevos-rancheros': 4, 'casamiento-con-huevo': 5, 'omelette-vegetales': 3, panqueques: 4,
+  'avena-con-leche': 4, 'cereal-con-leche': 4, 'yogurt-granola': 3, 'pan-con-frijoles': 4, 'sandwich-jamon-queso': 4,
+  'huevos-con-chorizo': 4, 'huevos-con-jamon': 4, 'licuado-banano': 3, 'platano-con-crema': 5, 'quesadillas-tortilla': 4,
+  enchiladas: 5, pastelitos: 4, 'sopa-de-pollo': 4, 'sopa-de-fideos': 3, 'crema-de-verduras': 2, 'ensalada-de-pollo': 3,
+  'tostadas-de-frijol': 3, 'yuca-con-chicharron': 5, 'tortilla-de-papa': 2, chilaquilas: 3,
+  'fruta-con-limon': 4, 'banano-refaccion': 4, 'manzana-refaccion': 3, naranjas: 4, 'papaya-picada': 3,
+  'galletas-con-cafe': 4, 'pan-dulce-cafe': 5, mani: 3, palomitas: 3, 'elote-cocido': 4, platanitos: 3,
+  'atol-de-elote': 4, 'empanadas-platano': 4, 'quesadilla-salvadorena': 5, gelatina: 2,
+};
+// Platos fritos (para el filtro "Sin frituras")
+const FRITOS = ['tilapia-frita', 'tortas-de-papa', 'tortas-de-guisquil', 'chiles-rellenos', 'tortitas-de-atun', 'hamburguesas',
+  'platano-con-crema', 'pastelitos', 'yuca-con-chicharron', 'platanitos', 'empanadas-platano', 'enchiladas', 'tostadas-de-frijol'];
+
+export const RECETAS = [...ALMUERZOS, ...COMEDOR, ...DESAYUNOS, ...CENAS, ...REFACCIONES];
+for (const r of RECETAS) {
+  r.popularidad ??= POPULARIDAD[r.id] ?? 3;
+  if (FRITOS.includes(r.id) && !r.etiquetas.includes('frito')) r.etiquetas.push('frito');
+}

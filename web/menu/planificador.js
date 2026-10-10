@@ -42,13 +42,26 @@ export const PERFIL_INICIAL = {
   ninos: 0,
   // comida -> { dias, porciones (null = las del hogar) }
   comidas: { almuerzo: { dias: [...LV], porciones: null } },
-  presupuesto: 0, // USD por semana; 0 = se sugiere uno
-  estilos: ['economico'],
+  // rango de presupuesto semanal (USD); 0 = se sugiere uno. El menú apunta al medio del rango.
+  presupuestoMin: 0,
+  presupuestoMax: 0,
+  estilos: [],
+  proteinas: [], // preferidas: se proponen más seguido
   evitar: [],
   aparatos: ['estufa', 'licuadora'],
+  tiempoMax: 0, // minutos máximos de cocina entre semana (0 = sin límite); el fin de semana no aplica
+  sinFritos: false,
+  soloConocidos: false, // solo platos muy comunes (popularidad ≥ 4)
 };
 
 const normal = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+/** ¿El producto es de limpieza, cuidado personal, utensilio o de mascota? (jabón de avena, exprimidor de limón…) */
+export function esNoComida(nombre) {
+  const n = normal(nombre);
+  const palabras = n.split(/[^a-z0-9]+/).filter(Boolean);
+  return NO_COMIDA.some((ex) => (ex.includes(' ') ? n.includes(ex) : palabras.some((w) => (ex.length >= 4 ? w.startsWith(ex) : w === ex))));
+}
 
 /** ¿Este producto de tienda sirve como este ingrediente? */
 export function productoValido(ingId, p) {
@@ -127,9 +140,24 @@ export function normalizarPerfil(perfil = {}) {
     if (c?.dias?.length) p.comidas[id] = { dias: SEMANA.filter((d) => c.dias.includes(d)), porciones: Number(c.porciones) || null };
   }
   p.estilos = [...(p.estilos || [])];
+  p.proteinas = [...(p.proteinas || [])];
   p.evitar = [...(p.evitar || [])];
   p.aparatos = [...(p.aparatos || [])];
+  // perfiles de antes (un solo número de presupuesto): ese número es el máximo.
+  // Ahí "Económico" venía marcado por defecto y hacía que todo saliera lo más barato posible: se quita.
+  if (perfil.presupuesto && !perfil.presupuestoMax) {
+    p.presupuestoMax = Number(perfil.presupuesto) || 0;
+    p.presupuestoMin = Math.round(p.presupuestoMax * 0.75);
+    p.estilos = p.estilos.filter((e) => e !== 'economico');
+  }
+  p.presupuestoMin = Math.max(0, Number(p.presupuestoMin) || 0);
+  p.presupuestoMax = Math.max(0, Number(p.presupuestoMax) || 0);
+  if (p.presupuestoMax && p.presupuestoMin > p.presupuestoMax) [p.presupuestoMin, p.presupuestoMax] = [p.presupuestoMax, p.presupuestoMin];
+  p.tiempoMax = Number(p.tiempoMax) || 0;
+  p.sinFritos = !!p.sinFritos;
+  p.soloConocidos = !!p.soloConocidos;
   delete p.dias;
+  delete p.presupuesto;
   return p;
 }
 
@@ -147,21 +175,49 @@ export function slotsDe(perfilEntrada) {
   return out;
 }
 
+/** Rango sugerido para la semana: de un menú sencillo a uno con más carne y variedad */
 export function presupuestoSugerido(perfil) {
-  return Math.round(slotsDe(perfil).reduce((s, x) => s + x.porciones * COSTO_SUGERIDO[TIEMPO[x.comida]], 0));
+  const base = slotsDe(perfil).reduce((s, x) => s + x.porciones * COSTO_SUGERIDO[TIEMPO[x.comida]], 0);
+  return { min: Math.round(base), max: Math.round(base * 1.6) };
 }
 
-/** Recetas que se pueden hacer con los aparatos y gustos del perfil (y opcionalmente para un tiempo de comida) */
-export function recetasPosibles(perfil, tiempo = null) {
+/** Rango del perfil; si no puso, el sugerido */
+export function rangoPresupuesto(perfilEntrada) {
+  const p = normalizarPerfil(perfilEntrada);
+  if (!p.presupuestoMax) return { ...presupuestoSugerido(p), sugerido: true };
+  return { min: p.presupuestoMin, max: p.presupuestoMax, sugerido: false };
+}
+
+/** Qué tan bien le cae una receta al perfil (sin contar el costo) */
+export function gusto(r, perfil) {
+  const estilos = new Set(perfil.estilos || []);
+  let g = r.popularidad ?? 3;
+  g += r.etiquetas.filter((e) => e !== 'dulce' && estilos.has(e)).length * 0.7;
+  if (estilos.has('tradicional') && r.etiquetas.includes('comedor')) g += 0.4;
+  if ((perfil.proteinas || []).includes(r.proteina)) g += 0.9;
+  return g;
+}
+
+/**
+ * Recetas que cumplen los filtros del perfil (aparatos, no me gusta, vegetariano, sin frituras, solo conocidos,
+ * tiempo máximo entre semana), opcionalmente para un tiempo de comida y un día.
+ */
+export function recetasPosibles(perfilEntrada, tiempo = null, dia = null) {
+  const perfil = normalizarPerfil(perfilEntrada);
   const aparatos = new Set([...(perfil.aparatos || []), 'estufa']);
   const evitar = new Set(perfil.evitar || []);
   const soloVeg = (perfil.estilos || []).includes('vegetariano');
+  const entreSemana = dia && !['sab', 'dom'].includes(dia);
   return RECETAS.filter((r) =>
     (!tiempo || (r.tiempos || ['almuerzo']).includes(tiempo)) &&
     r.aparatos.every((a) => aparatos.has(a) || a === 'licuadora') &&
     !evitar.has(r.proteina) &&
     !r.ing.some(([id]) => evitar.has(id)) &&
-    (!soloVeg || r.etiquetas.includes('vegetariano') || r.proteina === 'vegetal'));
+    !(evitar.has('picante') && r.etiquetas.includes('picante')) &&
+    (!soloVeg || r.etiquetas.includes('vegetariano') || r.proteina === 'vegetal') &&
+    (!perfil.sinFritos || !r.etiquetas.includes('frito')) &&
+    (!perfil.soloConocidos || (r.popularidad ?? 3) >= 4) &&
+    (!entreSemana || !perfil.tiempoMax || r.minutos <= perfil.tiempoMax));
 }
 
 /** Costo de una receta escalada, prorrateado (lo que "se come"), y la parte que hay que comprar */
@@ -196,13 +252,21 @@ export function planificar({ perfil: perfilEntrada, precios, despensa = new Set(
   const perfil = normalizarPerfil(perfilEntrada);
   const slots = slotsDe(perfil);
   if (!slots.length) return { error: 'Elige al menos una comida y un día.', slots: [], compras: [], total: 0 };
-  const porTiempo = {};
-  for (const t of new Set(slots.map((x) => TIEMPO[x.comida]))) {
-    porTiempo[t] = recetasPosibles(perfil, t);
-    if (!porTiempo[t].length) {
-      return { error: `No hay recetas de ${t} que cumplan con tus gustos y aparatos. Quita algo de "No me gusta".`, slots: [], compras: [], total: 0 };
+
+  // recetas posibles por comida y día (el tiempo máximo solo aplica entre semana)
+  const posibles = new Map();
+  const posiblesDe = (s) => {
+    const k = `${TIEMPO[s.comida]}|${['sab', 'dom'].includes(s.dia) ? 'finde' : 'semana'}`;
+    if (!posibles.has(k)) posibles.set(k, recetasPosibles(perfil, TIEMPO[s.comida], s.dia));
+    return posibles.get(k);
+  };
+  for (const s of slots) {
+    if (!posiblesDe(s).length) {
+      const nombre = nombreComida[s.comida].toLowerCase();
+      return { error: `No hay recetas de ${nombre} que cumplan con tus filtros. Quita algo de "No me gusta", sube el tiempo máximo o desmarca "Sin frituras" / "Solo platos conocidos".`, slots: [], compras: [], total: 0 };
     }
   }
+
   const porId = new Map(RECETAS.map((r) => [r.id, r]));
   const rnd = mulberry32(semilla);
   const estilos = new Set(perfil.estilos || []);
@@ -212,15 +276,27 @@ export function planificar({ perfil: perfilEntrada, precios, despensa = new Set(
     if (!cacheCosto.has(k)) cacheCosto.set(k, costoReceta(r, porciones, precios, despensa));
     return cacheCosto.get(k);
   };
+  const gustoDe = new Map(RECETAS.map((r) => [r.id, gusto(r, perfil)]));
+
+  // Presupuesto: se apunta al medio del rango ("Económico" apunta al mínimo). Cada comida recibe
+  // una parte según su peso típico (un almuerzo cuesta más que una refacción).
+  const rango = rangoPresupuesto(perfil);
+  const objetivo = estilos.has('economico') ? rango.min : (rango.min + rango.max) / 2;
+  const peso = (s) => s.porciones * COSTO_SUGERIDO[TIEMPO[s.comida]];
+  const pesoTotal = slots.reduce((t, s) => t + peso(s), 0) || 1;
+  const metaPorcion = (s) => (objetivo * peso(s)) / pesoTotal / s.porciones;
 
   const elegido = {}; // clave -> recetaId
   const usos = new Map();
   const ingUsados = new Set();
   const protPrincipal = new Map(); // proteína -> veces en almuerzo/cena
+  const familias = new Map(); // familia de plato (pupusas, sopa, huevos…) -> veces en la semana
+  const familia = (r) => r.familia || r.id.split('-')[0];
   const usar = (slot, r) => {
     elegido[claveSlot(slot.dia, slot.comida)] = r.id;
     usos.set(r.id, (usos.get(r.id) || 0) + 1);
     r.ing.forEach(([id]) => ingUsados.add(id));
+    familias.set(familia(r), (familias.get(familia(r)) || 0) + 1);
     if (['almuerzo', 'cena'].includes(TIEMPO[slot.comida])) protPrincipal.set(r.proteina, (protPrincipal.get(r.proteina) || 0) + 1);
   };
   const recetaEn = (dia, comida) => porId.get(elegido[claveSlot(dia, comida)]);
@@ -232,10 +308,17 @@ export function planificar({ perfil: perfilEntrada, precios, despensa = new Set(
     if (id && porId.has(id)) usar(s, porId.get(id));
   }
 
+  // Menor puntaje = mejor. Manda el gusto (platos conocidos y lo que te gusta); el costo solo
+  // pesa por cuánto se aleja de lo que te toca gastar en esa comida.
   const puntaje = (s, r) => {
     const t = TIEMPO[s.comida];
-    const c = costo(r, s.porciones);
-    let p = (c.aComprar / s.porciones) * 4; // costo normalizado a 4 porciones
+    let p = -gustoDe.get(r.id) * 1.1;
+    const meta = metaPorcion(s);
+    const pp = costo(r, s.porciones).aComprar / s.porciones;
+    if (meta > 0) {
+      const desvio = (pp - meta) / meta;
+      p += desvio > 0 ? desvio * 2.2 : -desvio * 0.8;
+    }
     const u = usos.get(r.id) || 0;
     p += u >= MAX_USOS[t] ? 50 : u * (t === 'desayuno' || t === 'refaccion' ? 1.2 : 4);
     const ayer = diaAnterior(s.dia) && recetaEn(diaAnterior(s.dia), s.comida);
@@ -245,7 +328,9 @@ export function planificar({ perfil: perfilEntrada, precios, despensa = new Set(
       const otra = recetaEn(s.dia, t === 'almuerzo' ? 'cena' : 'almuerzo');
       if (otra?.proteina === r.proteina) p += 1.5;
       if (ayer?.proteina === r.proteina) p += 1.2;
-      p += Math.max(0, (protPrincipal.get(r.proteina) || 0) - 1) * 0.6;
+      const n = protPrincipal.get(r.proteina) || 0; // misma proteína en la semana: cada vez pesa más
+      p += n * 0.5 + Math.max(0, n - 1) * 0.9;
+      p += (familias.get(familia(r)) || 0) * 1.2; // dos pupusas o dos sopas en la semana, menos probable
     }
     if (t === 'refaccion') {
       const otra = recetaEn(s.dia, s.comida === 'refaccion_am' ? 'refaccion_pm' : 'refaccion_am');
@@ -254,20 +339,19 @@ export function planificar({ perfil: perfilEntrada, precios, despensa = new Set(
       if (!finDeSemana && r.minutos > 30) p += 1; // entre semana, refacciones sencillas
     }
     if (t === 'desayuno' && !finDeSemana && r.minutos > 25) p += 0.8; // entre semana, desayunos rápidos
+    if (r.etiquetas.includes('finde')) p += finDeSemana ? -0.6 : 0.8; // carne asada, tamales: mejor el fin de semana
     const reusa = r.ing.filter(([id]) => !INGREDIENTES[id]?.basico && ingUsados.has(id)).length;
-    p -= Math.min(1, reusa * 0.15);
-    p -= r.etiquetas.filter((e) => e !== 'dulce' && estilos.has(e)).length * 0.6;
+    p -= Math.min(0.6, reusa * 0.1);
     if (estilos.has('rapido') && r.minutos > 45) p += 1;
-    p -= r.ing.filter(([id]) => precios[id]?.oferta).length * 0.3;
-    p += (rnd() - 0.5) * 2.6; // variedad entre "Generar otro"
+    p -= r.ing.filter(([id]) => precios[id]?.oferta).length * 0.2;
+    p += (rnd() - 0.5) * 1.4; // variedad entre "Generar otro"
     return p;
   };
 
   for (const s of slots) {
     if (elegido[claveSlot(s.dia, s.comida)]) continue;
-    const t = TIEMPO[s.comida];
-    let candidatas = porTiempo[t].filter((r) => !excluir.includes(r.id));
-    if (!candidatas.length) candidatas = porTiempo[t];
+    let candidatas = posiblesDe(s).filter((r) => !excluir.includes(r.id));
+    if (!candidatas.length) candidatas = posiblesDe(s);
     let mejor = null;
     let mejorP = Infinity;
     for (const r of candidatas) {
@@ -279,28 +363,51 @@ export function planificar({ perfil: perfilEntrada, precios, despensa = new Set(
 
   let plan = armar(slots, elegido, porId, costo, precios, despensa);
 
-  // Ajustar al presupuesto: cambiar la comida más cara por una receta más barata del mismo tipo
-  const pres = Number(perfil.presupuesto) || 0;
-  for (let i = 0; pres && plan.total > pres && i < 30; i++) {
-    const cambiables = plan.slots
-      .filter((x) => !fijos[claveSlot(x.dia, x.comida)])
-      .sort((a, b) => b.costo.aComprar / b.porciones - a.costo.aComprar / a.porciones);
-    let cambiado = false;
-    for (const x of cambiables) {
-      const t = TIEMPO[x.comida];
-      const usadas = new Map();
-      Object.values(elegido).forEach((id) => usadas.set(id, (usadas.get(id) || 0) + 1));
-      const alt = porTiempo[t]
-        .filter((r) => (usadas.get(r.id) || 0) < MAX_USOS[t] && !excluir.includes(r.id) &&
-          costo(r, x.porciones).aComprar < x.costo.aComprar - 0.01)
-        .sort((a, b) => costo(a, x.porciones).aComprar - costo(b, x.porciones).aComprar)[0];
-      if (alt) { elegido[claveSlot(x.dia, x.comida)] = alt.id; cambiado = true; break; }
+  // Acomodar al rango: si se pasa del máximo, cambiar la comida donde se ahorra más perdiendo menos gusto;
+  // si queda por debajo del mínimo, mejorar la comida donde se gana más gusto sin pasarse del máximo.
+  const conteo = () => {
+    const m = new Map();
+    Object.values(elegido).forEach((id) => m.set(id, (m.get(id) || 0) + 1));
+    return m;
+  };
+  for (let i = 0; i < 40; i++) {
+    const arriba = plan.total > rango.max + 0.01;
+    const abajo = !arriba && plan.total < rango.min - 0.01 && !estilos.has('economico');
+    if (!arriba && !abajo) break;
+    const usadas = conteo();
+    let mejorCambio = null;
+    for (const x of plan.slots) {
+      const k = claveSlot(x.dia, x.comida);
+      if (fijos[k]) continue;
+      const actual = porId.get(x.recetaId);
+      // variedad: cuántas otras comidas principales ya tienen esa proteína o esa familia de plato
+      const principal = ['almuerzo', 'cena'].includes(TIEMPO[x.comida]);
+      const otras = principal ? plan.slots.filter((y) => y !== x && ['almuerzo', 'cena'].includes(TIEMPO[y.comida])).map((y) => porId.get(y.recetaId)) : [];
+      const repetido = (r) => otras.filter((o) => o.proteina === r.proteina).length * 0.5 + otras.filter((o) => familia(o) === familia(r)).length * 0.8;
+      const cActual = x.costo.aComprar;
+      for (const r of posiblesDe(x)) {
+        if (r.id === actual.id || excluir.includes(r.id) || (usadas.get(r.id) || 0) >= MAX_USOS[TIEMPO[x.comida]]) continue;
+        const dif = costo(r, x.porciones).aComprar - cActual;
+        const dGusto = gustoDe.get(r.id) - gustoDe.get(actual.id) - (repetido(r) - repetido(actual));
+        let valor;
+        if (arriba) {
+          if (dif > -0.05) continue;
+          // gusto que se pierde por cada dólar ahorrado (mientras más cerca de 0, mejor); los platos raros, último recurso
+          valor = (dGusto - ((r.popularidad ?? 3) <= 2 ? 1.5 : 0)) / -dif;
+        } else {
+          if (dif < 0.05 || plan.total + dif > rango.max) continue;
+          if (dGusto < -0.5) continue; // no "mejorar" a un plato que gusta menos
+          valor = dGusto + Math.min(dif, rango.min - plan.total) * 0.3;
+        }
+        if (!mejorCambio || valor > mejorCambio.valor) mejorCambio = { k, r, valor };
+      }
     }
-    if (!cambiado) break;
+    if (!mejorCambio) break;
+    elegido[mejorCambio.k] = mejorCambio.r.id;
     plan = armar(slots, elegido, porId, costo, precios, despensa);
   }
-  plan.dentroPresupuesto = !pres || plan.total <= pres;
-  plan.presupuesto = pres;
+  plan.dentroPresupuesto = plan.total <= rango.max + 0.01 && plan.total >= rango.min - 0.01;
+  plan.presupuesto = rango;
   return plan;
 }
 

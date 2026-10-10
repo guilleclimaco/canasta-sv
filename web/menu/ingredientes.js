@@ -92,6 +92,7 @@ export const INGREDIENTES = {
   aguacate: { nombre: 'Aguacate', terminos: ['aguacate'], unidad: 'und', ref: 0.75, excluir: [...SIN_PROCESADOS, 'guacamole', 'salsa', 'aceite', 'crema', 'mascarilla'] },
 
   // ---------- panadería y tortillería ----------
+  loroco: { nombre: 'Loroco', terminos: ['loroco'], unidad: 'g', ref: 1.1, excluir: [...SIN_PROCESADOS, 'pupusa', 'salsa', 'crema'] },
   tortillas: { nombre: 'Tortillas', terminos: ['tortilla maiz', 'tortilla'], unidad: 'und', ref: 0.1, excluir: [...SIN_PROCESADOS, 'harina', 'tostada', 'trigo', 'nacho', 'integral'] },
   pan_frances: { nombre: 'Pan francés', terminos: ['pan frances'], unidad: 'und', ref: 0.15, excluir: [] },
   pan_hamburguesa: { nombre: 'Pan de hamburguesa', terminos: ['pan hamburguesa'], unidad: 'und', ref: 0.3, excluir: [] },
