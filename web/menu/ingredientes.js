@@ -10,6 +10,33 @@
 const SIN_PROCESADOS = ['sopa', 'consome', 'caldo', 'sabor', 'instantane', 'galleta', 'snack', 'boquita', 'chips',
   'jugo', 'bebida', 'refresco', 'helado', 'perro', 'gato', 'mascota', 'alimento para', 'bebe', 'gerber', 'colado'];
 
+// Productos que NO son comida aunque lleven el nombre de un ingrediente ("Lavaplatos con avena",
+// "Exprimidor de limón", "Papel higiénico Naranja"). Aplica a TODOS los ingredientes, salvo que la
+// palabra sea parte del propio término (ej. "cabello" en "cabello de ángel").
+// Palabras de 4+ letras cuentan como prefijo (jabon → jabones).
+export const NO_COMIDA = [
+  // limpieza y lavandería
+  'jabon', 'detergente', 'lavaplatos', 'lavatrastos', 'suavizante', 'cloro', 'desinfectante', 'limpiador',
+  'limpia', 'desengrasante', 'aromatizante', 'ambientador', 'insecticida', 'repelente', 'esponja', 'escoba',
+  // cuidado personal
+  'shampoo', 'champu', 'acondicionador', 'peinar', 'tinte', 'corporal', 'facial', 'locion', 'desodorante',
+  'antitranspirante', 'perfume', 'colonia', 'toallita', 'panal', 'rasurador', 'afeitar', 'labial',
+  'mascarilla', 'exfoliante', 'bloqueador', 'protector solar', 'neutroskin', 'pert', 'sedal', 'nivea', 'hinds',
+  'dental', 'enjuague', 'cepillo', 'higienico', 'servilleta', 'papel', 'panuelo', 'suero',
+  // cocina, hogar y otros
+  'exprimidor', 'cuchillo', 'rallador', 'colador', 'utensilio', 'sarten', 'olla', 'vaso', 'taza', 'plato',
+  'recipiente', 'adaptador', 'vela', 'maceta', 'semilla', 'batlle', 'jardin', 'juguete', 'potato head', 'decoracion',
+  // mascotas
+  'alimento para', 'mascota', 'perro', 'gato', 'gatito', 'cachorro', 'pedigree', 'whiskas', 'alimiau', 'dog chow', 'cat chow',
+];
+
+// Si el nombre del producto EMPIEZA con otro alimento, el producto es ese alimento:
+// "Frijoles con chorizo" son frijoles, "Salchicha de pechuga" es salchicha, "Yogurt de papaya" es yogurt.
+export const OTRO_ALIMENTO = ['frijol', 'arroz', 'salchicha', 'yogurt', 'yogur', 'crema', 'queso', 'leche', 'galleta',
+  'cereal', 'jamon', 'gelatina', 'vegetales', 'huevo', 'aceite', 'mayonesa', 'sopa', 'jugo', 'bebida', 'refresco',
+  'salsa', 'chorizo', 'atun', 'mantequilla', 'margarina', 'sazonador', 'consome', 'caldo', 'boquita',
+  'snack', 'chips', 'helado', 'mermelada', 'pure', 'harina', 'croqueta', 'mix', 'mezcla', 'guisante', 'chicharo', 'pan', 'pizza', 'nacho'];
+
 export const INGREDIENTES = {
   // ---------- granos y básicos de despensa ----------
   arroz: { nombre: 'Arroz', terminos: ['arroz blanco', 'arroz'], unidad: 'g', ref: 0.14, excluir: [...SIN_PROCESADOS, 'integral', 'precocido', 'leche', 'harina', 'pollo', 'mexicano', 'salvaje'] },
@@ -17,7 +44,7 @@ export const INGREDIENTES = {
   lentejas: { nombre: 'Lentejas', terminos: ['lenteja'], unidad: 'g', ref: 0.31, excluir: SIN_PROCESADOS },
   aceite: { nombre: 'Aceite', terminos: ['aceite'], unidad: 'ml', ref: 0.32, excluir: ['oliva', 'motor', 'bebe', 'coco', 'spray', 'aceituna', 'atun', 'sardina', 'corporal', 'cabello', 'masaje', 'aguacate', 'sesamo'] },
   espagueti: { nombre: 'Espagueti', terminos: ['espagueti', 'spaghetti', 'spagueti'], unidad: 'g', ref: 0.22, excluir: SIN_PROCESADOS },
-  coditos: { nombre: 'Coditos', terminos: ['codito'], unidad: 'g', ref: 0.22, excluir: SIN_PROCESADOS },
+  coditos: { nombre: 'Coditos', terminos: ['codito'], unidad: 'g', ref: 0.22, excluir: [...SIN_PROCESADOS, 'queso'] },
   harina_maiz: { nombre: 'Harina de maíz', terminos: ['harina maiz', 'maseca'], unidad: 'g', ref: 0.17, excluir: [...SIN_PROCESADOS, 'atol', 'trigo'] },
   pan_molido: { nombre: 'Pan molido', terminos: ['pan molido'], unidad: 'g', ref: 0.4, excluir: [] },
   salsa_tomate: { nombre: 'Salsa de tomate', terminos: ['salsa tomate'], unidad: 'g', ref: 0.42, excluir: ['ketchup', 'catsup', 'pizza', 'picante', 'barbacoa'] },
@@ -29,11 +56,11 @@ export const INGREDIENTES = {
   pechuga: { nombre: 'Pechuga de pollo', terminos: ['pechuga pollo'], unidad: 'g', ref: 0.6, excluir: [...SIN_PROCESADOS, 'empaniz', 'nugget', 'jamon', 'embutido', 'pavo', 'ahumad', 'rebanad'] },
   pollo_piezas: { nombre: 'Pollo en piezas', terminos: ['pierna pollo', 'muslo pollo', 'pollo entero', 'pollo'], unidad: 'g', ref: 0.42, excluir: [...SIN_PROCESADOS, 'pechuga', 'ala', 'nugget', 'empaniz', 'embutido', 'salchicha', 'jamon', 'mortadela', 'croqueta', 'pate', 'higado', 'molleja', 'pata', 'rostizado', 'asado'] },
   alitas: { nombre: 'Alitas de pollo', terminos: ['alita pollo', 'alas pollo'], unidad: 'g', ref: 0.55, excluir: [...SIN_PROCESADOS, 'empaniz', 'bbq', 'preparad'] },
-  res_posta: { nombre: 'Carne de res (posta)', terminos: ['posta res', 'posta', 'carne res'], unidad: 'g', ref: 1.01, excluir: [...SIN_PROCESADOS, 'molida', 'costilla', 'hueso', 'higado', 'lengua', 'menudo', 'panza', 'mondongo', 'embutido', 'salchicha', 'enlatad', 'seca'] },
+  res_posta: { nombre: 'Carne de res (posta)', terminos: ['posta res', 'posta', 'carne res'], unidad: 'g', ref: 1.01, excluir: [...SIN_PROCESADOS, 'molida', 'costilla', 'hueso', 'higado', 'lengua', 'menudo', 'panza', 'mondongo', 'embutido', 'salchicha', 'enlatad', 'seca', 'cerdo', 'patties', 'tortas'] },
   res_costilla: { nombre: 'Costilla de res', terminos: ['costilla res'], unidad: 'g', ref: 0.66, excluir: SIN_PROCESADOS },
   carne_molida: { nombre: 'Carne molida', terminos: ['carne molida'], unidad: 'g', ref: 0.77, excluir: [...SIN_PROCESADOS, 'pavo', 'pollo', 'soya', 'vegetal'] },
-  chuleta_cerdo: { nombre: 'Chuleta de cerdo', terminos: ['chuleta cerdo', 'chuleta'], unidad: 'g', ref: 0.75, excluir: [...SIN_PROCESADOS, 'ahumad'] },
-  chorizo: { nombre: 'Chorizo', terminos: ['chorizo'], unidad: 'g', ref: 0.66, excluir: SIN_PROCESADOS },
+  chuleta_cerdo: { nombre: 'Chuleta de cerdo', terminos: ['chuleta cerdo', 'chuleta'], unidad: 'g', ref: 0.75, excluir: [...SIN_PROCESADOS, 'ahumad', 'res'] },
+  chorizo: { nombre: 'Chorizo', terminos: ['chorizo'], unidad: 'g', ref: 0.66, excluir: [...SIN_PROCESADOS, 'refrito', 'fijoles'] },
   salchicha: { nombre: 'Salchichas', terminos: ['salchicha'], unidad: 'g', ref: 0.55, excluir: SIN_PROCESADOS },
   tilapia: { nombre: 'Tilapia', terminos: ['tilapia', 'filete pescado'], unidad: 'g', ref: 0.66, excluir: [...SIN_PROCESADOS, 'empaniz'] },
   atun: { nombre: 'Atún en lata', terminos: ['atun'], unidad: 'g', ref: 0.89, excluir: [...SIN_PROCESADOS, 'ensalada'] },
@@ -47,17 +74,17 @@ export const INGREDIENTES = {
 
   // ---------- verduras y frutas ----------
   tomate: { nombre: 'Tomate', terminos: ['tomate'], unidad: 'g', ref: 0.18, excluir: [...SIN_PROCESADOS, 'salsa', 'pasta', 'pure', 'ketchup', 'deshidratad', 'lata', 'pelado', 'cherry'] },
-  cebolla: { nombre: 'Cebolla', terminos: ['cebolla'], unidad: 'g', ref: 0.2, excluir: [...SIN_PROCESADOS, 'polvo', 'aros', 'deshidratad', 'sal', 'encurtid', 'verde'] },
+  cebolla: { nombre: 'Cebolla', terminos: ['cebolla'], unidad: 'g', ref: 0.2, excluir: [...SIN_PROCESADOS, 'polvo', 'aros', 'deshidratad', 'sal', 'encurtid', 'verde', 'crema'] },
   chile_verde: { nombre: 'Chile verde', terminos: ['chile verde', 'chile dulce', 'pimiento verde'], unidad: 'und', ref: 0.35, excluir: [...SIN_PROCESADOS, 'salsa', 'polvo', 'encurtid'] },
-  papa: { nombre: 'Papa', terminos: ['papa'], unidad: 'g', ref: 0.17, excluir: [...SIN_PROCESADOS, 'frita', 'pure', 'papaya', 'tostada', 'congelad', 'hash', 'paprika'] },
+  papa: { nombre: 'Papa', terminos: ['papa'], unidad: 'g', ref: 0.17, excluir: [...SIN_PROCESADOS, 'frita', 'pure', 'papaya', 'tostada', 'congelad', 'hash', 'paprika', 'freir', 'sazonad', 'congelad', 'hashbrown', 'tortita'] },
   zanahoria: { nombre: 'Zanahoria', terminos: ['zanahoria'], unidad: 'g', ref: 0.13, excluir: [...SIN_PROCESADOS, 'pure', 'rallada'] },
   guisquil: { nombre: 'Güisquil', terminos: ['guisquil', 'chayote'], unidad: 'und', ref: 0.4, excluir: SIN_PROCESADOS },
-  yuca: { nombre: 'Yuca', terminos: ['yuca'], unidad: 'g', ref: 0.15, excluir: [...SIN_PROCESADOS, 'frita', 'harina'] },
+  yuca: { nombre: 'Yuca', terminos: ['yuca'], unidad: 'g', ref: 0.15, excluir: [...SIN_PROCESADOS, 'frita', 'harina', 'diana', 'nicol', 'tipic', 'cashita', 'yummies', 'vinagre', 'con sal', 'crema'] },
   elote: { nombre: 'Elote', terminos: ['elote'], unidad: 'und', ref: 0.4, excluir: [...SIN_PROCESADOS, 'lata', 'crema', 'dulce', 'grano', 'pan', 'atol', 'tamal'] },
   repollo: { nombre: 'Repollo', terminos: ['repollo'], unidad: 'und', ref: 1.0, excluir: [...SIN_PROCESADOS, 'ensalada', 'morado'] },
   lechuga: { nombre: 'Lechuga', terminos: ['lechuga'], unidad: 'und', ref: 0.9, excluir: [...SIN_PROCESADOS, 'mezcla', 'ensalada'] },
   pepino: { nombre: 'Pepino', terminos: ['pepino'], unidad: 'und', ref: 0.3, excluir: [...SIN_PROCESADOS, 'encurtid', 'pepinillo', 'jabon', 'crema', 'facial'] },
-  brocoli: { nombre: 'Brócoli', terminos: ['brocoli'], unidad: 'g', ref: 0.26, excluir: [...SIN_PROCESADOS, 'mezcla'] },
+  brocoli: { nombre: 'Brócoli', terminos: ['brocoli'], unidad: 'g', ref: 0.26, excluir: [...SIN_PROCESADOS, 'mezcla', 'pasta'] },
   limon: { nombre: 'Limón', terminos: ['limon persa', 'limon criollo', 'limon'], unidad: 'und', ref: 0.1, excluir: [...SIN_PROCESADOS, 'te', 'limonada', 'agua', 'cloro', 'lavaplatos', 'jabon', 'desinfectante', 'detergente', 'aroma', 'pie', 'pastel', 'sal', 'pimienta', 'suavizante', 'limpiador'] },
   cilantro: { nombre: 'Cilantro', terminos: ['cilantro'], unidad: 'und', ref: 0.25, excluir: [...SIN_PROCESADOS, 'polvo', 'seco', 'deshidratad'] },
   hierbabuena: { nombre: 'Hierbabuena', terminos: ['hierbabuena', 'hierba buena'], unidad: 'und', ref: 0.25, excluir: [...SIN_PROCESADOS, 'te', 'chicle', 'pasta', 'dental'] },
@@ -81,7 +108,7 @@ export const INGREDIENTES = {
   harina_panqueque: { nombre: 'Harina para panqueques', terminos: ['harina panqueque', 'mezcla panqueque', 'pancake'], unidad: 'g', ref: 0.45, excluir: ['miel', 'jarabe', 'sirope'] },
   harina_arroz: { nombre: 'Harina de arroz', terminos: ['harina arroz'], unidad: 'g', ref: 0.35, excluir: [] },
   jamon: { nombre: 'Jamón', terminos: ['jamon'], unidad: 'g', ref: 0.9, excluir: ['serrano', 'iberico', 'sabor'] },
-  queso_amarillo: { nombre: 'Queso amarillo (rodajas)', terminos: ['queso amarillo', 'queso americano', 'queso cheddar'], unidad: 'g', ref: 1.1, excluir: ['salsa', 'dip', 'snack', 'boquita', 'galleta', 'polvo'] },
+  queso_amarillo: { nombre: 'Queso amarillo (rodajas)', terminos: ['queso amarillo', 'queso americano', 'queso cheddar'], unidad: 'g', ref: 1.1, excluir: ['salsa', 'dip', 'snack', 'boquita', 'galleta', 'polvo', 'crema', 'pasta', 'sabor a'] },
   chicharron: { nombre: 'Chicharrón', terminos: ['chicharron'], unidad: 'g', ref: 0.9, excluir: [...SIN_PROCESADOS, 'harina', 'bolsa'] },
   fideos: { nombre: 'Fideos', terminos: ['fideo', 'cabello angel'], unidad: 'g', ref: 0.3, excluir: SIN_PROCESADOS },
   tostadas: { nombre: 'Tostadas de maíz', terminos: ['tostada maiz', 'tostada'], unidad: 'und', ref: 0.08, excluir: ['pan tostado', 'harina', 'trigo', 'integral', 'nacho'] },

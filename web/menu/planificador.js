@@ -1,6 +1,6 @@
 // Arma el menú de la semana con los precios reales de las tiendas.
 // Lógica pura (sin red ni DOM) para poder probarla.
-import { INGREDIENTES } from './ingredientes.js';
+import { INGREDIENTES, NO_COMIDA, OTRO_ALIMENTO } from './ingredientes.js';
 import { RECETAS } from './recetas.js';
 
 export const DIAS = [
@@ -57,15 +57,24 @@ export function productoValido(ingId, p) {
   if (p.unidad !== ing.unidad || !p.contenido || !p.precio) return false;
   const nombre = normal(p.busqueda || p.nombre);
   const palabras = nombre.split(/[^a-z0-9]+/).filter(Boolean);
-  // cada palabra del término debe ser el INICIO de una palabra del producto
-  // ("crema" sí en "crema acida", no en "semidescremada")
-  const coincide = (ing.terminos || []).some((t) => t.split(' ').every((w) => palabras.some((x) => x.startsWith(w))));
+  // cada palabra del término debe ser una palabra completa del producto, o su plural
+  // ("limon" sí en "limones"; "pan" no en "panela"; "papa" no en "papaya" ni "Papadan").
+  // Palabras largas (6+) aceptan prefijo: "codito" → "coditos", "pancake" → "pancakes".
+  const esPalabra = (x, w) => x === w || x === w + 's' || x === w + 'es' || (w.length >= 6 && x.startsWith(w));
+  const coincide = (ing.terminos || []).some((t) => t.split(' ').every((w) => palabras.some((x) => esPalabra(x, w))));
   if (!coincide) return false;
-  for (const ex of ing.excluir || []) {
-    if (ex.includes(' ')) { if (nombre.includes(ex)) return false; continue; }
+  const propias = new Set((ing.terminos || []).flatMap((t) => t.split(' ')));
+  const tiene = (ex) => {
+    if (ex.includes(' ')) return nombre.includes(ex);
     // palabras cortas: palabra exacta; largas: prefijo (empaniz → empanizado)
-    if (palabras.some((w) => (ex.length >= 4 ? w.startsWith(ex) : w === ex))) return false;
-  }
+    return palabras.some((w) => (ex.length >= 4 ? w.startsWith(ex) : w === ex));
+  };
+  if ((ing.excluir || []).some(tiene)) return false;
+  // productos que no son comida (jabón de avena, exprimidor de limón…)
+  if (NO_COMIDA.some((ex) => !propias.has(ex) && tiene(ex))) return false;
+  // empieza con otro alimento: "Frijoles con chorizo" no es chorizo
+  const primera = normal(p.nombre || p.busqueda).split(/[^a-z0-9]+/).find(Boolean) || '';
+  if (OTRO_ALIMENTO.some((a) => esPalabra(primera, a) && ![...propias].some((w) => esPalabra(primera, w)))) return false;
   return true;
 }
 

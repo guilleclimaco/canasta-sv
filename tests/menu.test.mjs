@@ -41,6 +41,39 @@ test('cada ingrediente cotizable tiene términos, unidad y precio de referencia'
   assert.ok(terminosDeIngredientes().includes('avena'));
 });
 
+test('productoValido: nombres reales que se colaban (oct 2026)', () => {
+  const no = (ing, nombre, unidad = 'g') => assert.ok(!productoValido(ing, prod({ nombre, unidad, contenido: 300, precio: 2 })), `${ing} ✗ ${nombre}`);
+  const si = (ing, nombre, unidad = 'g') => assert.ok(productoValido(ing, prod({ nombre, unidad, contenido: 300, precio: 2 })), `${ing} ✓ ${nombre}`);
+  // no son comida
+  no('cafe', 'Palmolive Jabon Cafe Y Almendr 3pk 300gr');
+  no('avena', 'Lavaplatos Klinpiax avena - 1 kg');
+  no('limon', 'Exprimidor Mainstays de Limón Color Amarillo - Unidad', 'und');
+  no('crema', 'Crema Pert Olivo y Aguacate 300 ml', 'ml');
+  no('naranja', 'Papel Higiénico Rosal Naranja Doble Hoja - 40 Rollos', 'und');
+  no('mango', 'Rasuradoras Desechables Equate 2 Hojas Mango Reforzado', 'und');
+  no('pollo_piezas', 'Alimento Gatito Alimiau Pollo 1000g');
+  no('pepino', 'Toallitas Húmedas Parent´s Choice Pepino y Vitamina E 3 pack - 300 Uds', 'und');
+  no('zanahoria', 'Batlle Zanahoria Chantenay Sobre 10.0 g');
+  // palabra completa, no pedazo
+  no('pan_dulce', 'Dulce De Panela Granulado - 1 Unidad', 'und');
+  no('papa', 'Arroz Precocido Papadan 454 Gr');
+  // empieza con otro alimento
+  no('chorizo', 'Frijoles Campofresco con chorizo - 340 g');
+  no('pechuga', 'Salchicha De Pechuga De Pollo Sello De Oro 454 g');
+  no('papaya', 'Yogurt Líquido Yes Vitalite Papaya 212 g');
+  no('brocoli', 'Crema Maggi De Brocoli Sobre - 65 g');
+  // y lo que sí es
+  si('avena', 'Avena Great Value En Hojuelas - 300 g');
+  si('cafe', 'Café Coex Tostado Molido Bolsa 400 g');
+  si('limon', 'Limón Pérsico Hortifruti - 10 unidades', 'und');
+  si('espagueti', 'Pasta Larga Ina Espagueti 3 Pack 600g');
+  si('harina_panqueque', 'Mezcla Great Value Para Pancakes Original - 907 g');
+  si('fideos', 'Pasta Ina cabello de ángel - 150 g');
+  si('chorizo', 'Chorizo Criollo Precocido 340 g');
+  si('papa', 'Papa Americana - 2 a 4 Unidades Aproximadamente, precio Indicado Por Libra (454 g)');
+  si('leche', 'Leche Entera Sula Uht Elecster - 946 ml', 'ml');
+});
+
 test('productoValido descarta productos que no son el ingrediente', () => {
   assert.ok(productoValido('pechuga', prod({ nombre: 'Pechuga de Pollo Deshuesada 1 lb', unidad: 'g', contenido: 453.59, precio: 2.7 })));
   assert.ok(!productoValido('pechuga', prod({ nombre: 'Pechuga de pollo empanizada 500 g', unidad: 'g', contenido: 500, precio: 4 })));
