@@ -157,3 +157,69 @@ export function fechaDeArchivo(url) {
   const m = String(url).match(/(\d{2})\.(\d{2})\.(\d{4})_Informe/i);
   return m ? `${m[3]}-${m[2]}-${m[1]}` : null;
 }
+
+// ---------------------------------------------------------------------
+// Agromercados del MAG: precios anotados a mano ("20 tomates grandes por $1")
+// ---------------------------------------------------------------------
+const GRAMOS_LIBRA = 453.59;
+const GRAMOS_ONZA = 28.35;
+/** Gramos que pesa una unidad, para ingredientes que la receta mide en gramos pero el agromercado vende por unidad */
+export const GRAMOS_POR_UNIDAD = { tomate: 150, cebolla: 200, papa: 200, zanahoria: 120, brocoli: 400, sandia: 2500, papaya: 1800,
+  ayote: 400, yuca: 500, pipian: 300, coliflor: 600, ejote: 10, melon: 1500 };
+/** Ingredientes que se suelen encontrar en un agromercado (para el formulario) */
+export const INGREDIENTES_AGROMERCADO = ['tomate', 'cebolla', 'papa', 'limon', 'banano', 'platano', 'chile_verde', 'zanahoria', 'repollo', 'pepino',
+  'aguacate', 'guisquil', 'yuca', 'elote', 'cilantro', 'lechuga', 'brocoli', 'rabano', 'ayote', 'ejote', 'pipian', 'loroco', 'sandia', 'papaya',
+  'pina', 'mango', 'naranja', 'melon', 'arroz', 'frijol', 'huevo', 'queso_duro', 'crema'];
+
+/**
+ * Precio por unidad base (g, ml o und) según el agromercado.
+ * @returns {{precioUnit:number, unidades:number}|null} null si no se puede convertir (ej. por unidad sin peso)
+ */
+export function precioUnitarioAgro(fila, catalogo) {
+  const ing = catalogo[fila.ingrediente];
+  const cant = Number(fila.cantidad);
+  const precio = Number(fila.precio);
+  if (!ing || ing.basico || !(cant > 0) || !(precio > 0)) return null;
+  let unidades = null;
+  if (fila.unidad === 'lb' && ing.unidad === 'g') unidades = cant * GRAMOS_LIBRA;
+  else if (fila.unidad === 'oz' && ing.unidad === 'g') unidades = cant * GRAMOS_ONZA;
+  else if (fila.unidad === 'und' && ing.unidad === 'und') unidades = cant;
+  else if (fila.unidad === 'und' && ing.unidad === 'g') {
+    const g = Number(fila.gramos_unidad) || GRAMOS_POR_UNIDAD[fila.ingrediente];
+    if (g) unidades = cant * g;
+  }
+  return unidades ? { precioUnit: precio / unidades, unidades } : null;
+}
+
+/** Igual que preciosMercado() pero con las filas del agromercado (se queda con la opción más barata de cada ingrediente) */
+export function preciosAgromercado(filas, catalogo) {
+  const res = new Map();
+  for (const f of filas || []) {
+    const pu = precioUnitarioAgro(f, catalogo);
+    if (!pu) continue;
+    const prev = res.get(f.ingrediente);
+    if (!prev || pu.precioUnit < prev.precioUnit) {
+      res.set(f.ingrediente, { precioUnit: pu.precioUnit, producto: `${f.descripcion} (${textoAgro(f)})`, fecha: String(f.fecha).slice(0, 10),
+        promedio: Number(f.precio), cantidad: Number(f.cantidad), unidad: f.unidad, origen: 'agromercado' });
+    }
+  }
+  return res;
+}
+
+/** "20 por $1.00", "12 lb por $4.00" */
+export function textoAgro(f) {
+  const u = f.unidad === 'und' ? '' : ` ${f.unidad}`;
+  return `${Number(f.cantidad)}${u} por $${Number(f.precio).toFixed(2)}`;
+}
+
+/** Junta Defensoría y Agromercado: por ingrediente, el precio más barato (y de dónde viene) */
+export function combinarMercados(...mapas) {
+  const res = new Map();
+  for (const m of mapas) {
+    for (const [ing, v] of m || []) {
+      const prev = res.get(ing);
+      if (!prev || v.precioUnit < prev.precioUnit) res.set(ing, { origen: 'defensoria', ...v });
+    }
+  }
+  return res;
+}

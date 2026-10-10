@@ -495,3 +495,7 @@ details.bien[open] summary::after { content: " ▴"; }
 .nivel-barato { background: var(--cian-suave); color: var(--prusia); }
 .nivel-intermedio { background: var(--verde-suave); color: var(--prusia); }
 .nivel-caro { background: var(--ahorro-suave); color: var(--crimson); }
+/* precios del Agromercado */
+.fila-agro { display: flex; flex-direction: column; gap: 3px; width: 100%; text-align: left; padding: 12px 14px; background: none; border: 0; border-bottom: 1px solid var(--linea); color: inherit; font: inherit; }
+.fila-agro:last-child { border-bottom: 0; }
+.fila-agro .n { font-weight: 650; }

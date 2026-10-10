@@ -194,6 +194,18 @@ async function crearReal() {
       if (!ult.length) return [];
       return ok(await sb.from('precios_mercado').select('*').eq('fecha', ult[0].fecha));
     },
+    // ---- precios de los Agromercados del MAG (anotados a mano, compartidos entre hogares) ----
+    async preciosAgromercado() {
+      return ok(await sb.from('precios_agromercado').select('*').order('ingrediente').order('descripcion'));
+    },
+    async guardarPrecioAgromercado(fila) {
+      const datos = { ingrediente: fila.ingrediente, descripcion: fila.descripcion, cantidad: fila.cantidad, unidad: fila.unidad,
+        precio: fila.precio, gramos_unidad: fila.gramos_unidad || null, fecha: fila.fecha || new Date().toISOString().slice(0, 10), fuente: fila.fuente || 'Anotado en la app' };
+      return ok(await sb.from('precios_agromercado').upsert(datos, { onConflict: 'ingrediente,descripcion' }).select().single());
+    },
+    async borrarPrecioAgromercado(id) {
+      ok(await sb.from('precios_agromercado').delete().eq('id', id));
+    },
     // ---- v4: avisos ----
     async guardarSuscripcion(sub, prefs) {
       ok(await sb.from('avisos_suscripciones').upsert({ endpoint: sub.endpoint, datos: sub, prefs }));
@@ -369,6 +381,13 @@ function crearDemo() {
   const resumenDemo = (p) => (p.precio < p.precio_lista
     ? { producto_id: p.id, min60: p.precio, max60: p.precio_lista, prom60: (p.precio + p.precio_lista) / 2, puntos: [[enDias(-40), p.precio_lista], [enDias(-15), p.precio_lista + 0.1], [enDias(-2), p.precio]] }
     : { producto_id: p.id, min60: p.precio - 0.15, max60: p.precio + 0.1, prom60: p.precio, puntos: [[enDias(-50), p.precio - 0.15], [enDias(-20), p.precio + 0.1], [enDias(-5), p.precio]] });
+  let agroDemo = [
+    { id: 1, ingrediente: 'tomate', descripcion: 'Tomate grande', cantidad: 20, unidad: 'und', precio: 1, gramos_unidad: 170, fecha: '2026-05-15', fuente: 'Lista del MAG' },
+    { id: 2, ingrediente: 'cebolla', descripcion: 'Cebolla blanca', cantidad: 10, unidad: 'und', precio: 1, gramos_unidad: 200, fecha: '2026-05-15', fuente: 'Lista del MAG' },
+    { id: 3, ingrediente: 'limon', descripcion: 'Limón', cantidad: 32, unidad: 'und', precio: 2, fecha: '2026-09-30', fuente: 'Video del MAG' },
+    { id: 4, ingrediente: 'papa', descripcion: 'Papa', cantidad: 12, unidad: 'lb', precio: 4, fecha: '2026-09-30', fuente: 'Video del MAG' },
+    { id: 5, ingrediente: 'frijol', descripcion: 'Frijol', cantidad: 1, unidad: 'lb', precio: 0.7, fecha: '2026-07-01', fuente: 'Lista del MAG' },
+  ];
   const mercadoDemo = [
     ['Carnes', 'Pollo, pechuga con hueso y ala', 1, 'Libra', 1.84], ['Carnes', 'Carne de res, posta negra', 1, 'Libra', 4.42],
     ['Frutas', 'Guineo importado (banano)', 1, 'Unidades', 0.15], ['Frutas', 'Limón Pérsico', 1, 'Unidades', 0.18],
@@ -482,6 +501,14 @@ function crearDemo() {
       return productos.filter((p) => p.ean && p.ean.replace(/^0+/, '') === c).sort((a, b) => a.precio - b.precio);
     },
     async preciosMercado() { return mercadoDemo; },
+    async preciosAgromercado() { return agroDemo.map((f) => ({ ...f })); },
+    async guardarPrecioAgromercado(fila) {
+      const i = agroDemo.findIndex((f) => f.ingrediente === fila.ingrediente && f.descripcion === fila.descripcion);
+      const nueva = { id: i >= 0 ? agroDemo[i].id : Date.now(), fecha: new Date().toISOString().slice(0, 10), fuente: 'Anotado en la app', ...fila };
+      if (i >= 0) agroDemo[i] = nueva; else agroDemo.push(nueva);
+      return nueva;
+    },
+    async borrarPrecioAgromercado(id) { agroDemo = agroDemo.filter((f) => f.id !== id); },
     async guardarSuscripcion() {},
     async borrarSuscripcion() {},
     async suscripcion() { return null; },

@@ -14,7 +14,7 @@ import {
   cargarDespensa, despensaParaPlan, vistaDespensa, agregarDesdeItem, quitarDesdeItem, consumirReceta, restaurarConsumo, avisoEntro,
 } from './v4/despensa.js';
 import { cargarResumenLista, etiquetaPrecio, bloqueHistorial } from './v4/historial.js';
-import { cargarMercado, masBaratoEnMercado, chipMercado, fechaMercado } from './v4/mercado-ui.js';
+import { cargarMercado, masBaratoEnMercado, chipMercado, notaMercado, hojaAgromercado } from './v4/mercado-ui.js';
 import { abrirModoSuper } from './v4/super.js';
 import { compartirLista } from './v4/compartir.js';
 import { abrirEscaner } from './v4/escaner.js';
@@ -230,9 +230,9 @@ function vistaLista(v) {
       <button class="btn-secundario" id="escanear">📷 Escanear</button>
       ${pendientes.length ? '<button class="btn-secundario" id="compartir">Compartir</button>' : ''}
     </div>
-    ${enMercado.length ? `<div class="banda-mercado">🧺 <b>En el mercado sale más barato:</b>
-      ${enMercado.map((x) => `${esc(x.item.nombre)} (~${dinero(x.mercado)} vs ${dinero(x.super)})`).join(', ')}.
-      <span class="sub">Precio promedio del sondeo de la Defensoría${fechaMercado() ? ` del ${esc(new Date(`${fechaMercado()}T12:00:00`).toLocaleDateString('es-SV', { day: 'numeric', month: 'short' }))}` : ''}.</span></div>` : ''}
+    ${enMercado.length ? `<div class="banda-mercado">🧺 <b>Sale más barato fuera del súper:</b>
+      ${enMercado.map((x) => `${esc(x.item.nombre)} en ${x.origen === 'agromercado' ? 'el Agromercado' : 'el mercado'} (~${dinero(x.mercado)} vs ${dinero(x.super)})`).join(', ')}.
+      <span class="sub">${esc(notaMercado(enMercado))} <button class="btn-texto" id="ver-agro" style="padding:0">Precios del Agromercado</button></span></div>` : ''}
     ${estado.lista.length ? `
       <div class="items tarjeta">${estado.lista.map(filaItem).join('')}</div>
       <div class="resumen tarjeta">
@@ -274,6 +274,7 @@ function vistaLista(v) {
   };
   conectarSegmento();
   $('#btn-super')?.addEventListener('click', abrirModoSuper);
+  $('#ver-agro')?.addEventListener('click', hojaAgromercado);
   $('#escanear').onclick = abrirEscaner;
   $('#compartir')?.addEventListener('click', compartirLista);
   $('#limpiar')?.addEventListener('click', async () => {
@@ -1429,6 +1430,10 @@ async function hojaAjustes() {
         ${estado.tiendas.map((t) => `<label style="display:flex;gap:10px;align-items:center;font-weight:500;color:var(--tinta);padding:6px 0">
           <input type="checkbox" value="${esc(t.id)}" ${act.has(t.id) ? 'checked' : ''} style="width:20px;height:20px"> ${chip(t.id)} ${esc(t.nombre)}</label>`).join('')}
       </div>
+      <div class="campo">Agromercados del MAG
+        <span style="font-weight:400;color:var(--tinta)">Anota la lista de precios que publica el MAG para compararla con el súper.</span>
+        <button type="button" class="btn-secundario" id="abrir-agro" style="margin-top:6px">🧺 Precios del Agromercado</button>
+      </div>
       <div class="campo">Avisos al celular
         <div id="avisos-cont" class="sub">Revisando…</div>
       </div>
@@ -1443,6 +1448,7 @@ async function hojaAjustes() {
     </div>
     <div class="pie"><button class="btn-secundario" id="salir">Cerrar sesión</button><button class="btn-primario" id="guardar">Guardar</button></div>`);
   $('#salir', h).onclick = async () => { await D.salir(); location.reload(); };
+  $('#abrir-agro', h).onclick = () => { cerrarHoja(); hojaAgromercado(); };
   pintarAvisos($('#avisos-cont', h));
   $('#guardar', h).onclick = async () => {
     const tiendas = $$('input[type=checkbox][value]:checked', h).filter((c) => estado.tiendaMap[c.value]).map((c) => c.value);

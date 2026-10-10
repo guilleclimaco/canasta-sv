@@ -352,6 +352,7 @@ Cada quien entra con su correo, que debe estar en `miembros`, y escribe el códi
 
 ## Mantenimiento
 
+- **Agromercados del MAG**: el MAG publica su lista de precios como imagen o video en redes, no como datos. Se anota a mano en la app (Ajustes → Precios del Agromercado, o desde la banda de la Lista). Son precios nacionales: los ven y los corrigen todos los hogares. La app avisa (⚠) cuando un precio tiene más de un mes.
 - **Otro hogar** (alguien que vive aparte y quiere su propia lista, gastos y menú, con los mismos precios): `node scraper/agregar-miembro.mjs correo@x.com Nombre --hogar otro`. Sin `--hogar` la persona entra al hogar `casa` y comparte todo.
 - **Cambiaste algo en `web/`**: sube `VERSION` en `web/sw.js` para que los celulares bajen la versión nueva.
 - **Robot diario**: GitHub apaga los workflows programados tras 60 días sin actividad; el "latido mensual" del workflow lo evita.
