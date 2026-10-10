@@ -1,6 +1,6 @@
 # 🧺 Canasta SV
 
-App para el celular (iPhone y Android) que junta la **lista del súper**, el **menú de la semana (desayunos, refacciones, almuerzos y cenas)**, el **presupuesto del mes** y un **comparador de precios** de supermercados de El Salvador. Te arma qué cocinar con lo más barato de la semana, te pasa los ingredientes a la lista Te dice si conviene comprar todo en un solo lugar o dividir la compra entre dos tiendas, y solo te manda a la segunda si el ahorro vale la vuelta.
+App para el celular (iPhone y Android) que junta la **lista del súper**, el **menú de la semana (desayunos, refacciones, almuerzos y cenas)**, lo que se usa en la **casa** (cuidado personal y limpieza), el **presupuesto del mes** y un **comparador de precios** de supermercados de El Salvador. Te arma qué cocinar con lo más barato de la semana, te pasa los ingredientes a la lista, te avisa qué jabón, detergente o papel se te está acabando y te dice si conviene comprar todo en un solo lugar o dividir la compra entre dos tiendas, y solo te manda a la segunda si el ahorro vale la vuelta.
 
 **Costo mensual: $0.** Todo corre en planes gratuitos.
 
@@ -17,10 +17,27 @@ App para el celular (iPhone y Android) que junta la **lista del súper**, el **m
 | Pantalla | Para qué |
 |---|---|
 | **Menú** | Estilo NeatEat. Eliges qué comidas planear (desayuno, refacción de la mañana, almuerzo, refacción de la tarde, cena) en una cuadrícula de día × comida, con plantillas rápidas ("Solo almuerzos", "Desayuno + almuerzo", "Todo el día"…), y cuántas porciones lleva cada comida. Con tu presupuesto, gustos, aparatos y lo que ya tienes en casa, arma la semana con un recetario de 68 platos salvadoreños y cotidianos, usando los precios reales de hoy. Puedes cambiar cualquier comida al azar o elegirla del recetario, ver la receta con cantidades y pasos, y mandar los ingredientes a la lista con un toque. Sin IA de pago: $0. |
+| **Casa** | Cuidado personal (pasta dental, jabón, shampoo, desodorante, papel higiénico…) y limpieza (detergente, suavizante, cloro, desinfectante para piso, lavaplatos…). No va por presupuesto sino por **necesidad**: estima cuánto queda de cada cosa, te dice qué llevar en la próxima compra, cuánto, de qué tienda y cuándo conviene comprar de más porque está en oferta. Aprende lo que gasta tu casa. |
 | **Lista** | Escribes "arroz 2", eliges el producto exacto y ves en qué tienda sale más barato. La lista se comparte en vivo entre los dos celulares. |
 | **Dónde comprar** | Arma el plan más barato: una sola tienda, o dos si te ahorras más de lo que tú definas (por defecto $3). Te dice qué comprar en cada lugar. |
 | **Ofertas** | Productos con precio por debajo de su precio normal o de su máximo de los últimos 60 días. Filtro "De mi lista". |
 | **Gastos** | Presupuesto por categoría (Súper, Mercado, Limpieza…), gastos registrados, cuánto te queda en el mes, **resumen de ahorro** por mes y una **meta** (ej. el carro). El gasto se puede registrar con **foto del ticket**. |
+
+### Novedades de la v5: la casa
+
+Los artículos de cuidado personal y limpieza no se compran por presupuesto ni por menú: se compran **cuando se van a acabar**.
+La pestaña **Casa** lleva la cuenta:
+
+| Qué | Cómo |
+|---|---|
+| **Configurar en 1 minuto** | Cuántos son (adultos y niños), cada cuánto haces la compra grande (semana, quincena o mes), qué usan y cuánto queda más o menos de cada cosa ("Nada", "Poquito", "La mitad", "Lleno"). |
+| **Cuánto te queda** | Cada artículo tiene un consumo al mes (estimado por persona; los niños cuentan media). El stock baja solo con los días: "Te queda para ~2 semanas". 🔴 se acabó o ≤ 7 días · 🟡 se acaba antes de tu próxima compra · 🟢 bien. |
+| **Qué llevar y cuánto** | Lo que alcance hasta la próxima compra + una semana de colchón, en la **presentación más barata por ml, g o unidad** (ej. el 3-pack de pasta dental si sale mejor), sin tamaños absurdos para tu consumo. |
+| **De qué tienda** | Compara Walmart, Maxi, Don Juan y Selectos. "Agregar a la lista" lo pasa a la Lista con sus equivalentes en otras tiendas, y **Comprar** arma la ruta de siempre (una tienda o dos si vale la vuelta), junto con la comida. |
+| **Con descuentos** | Si algo que usas está ≥ 15 % más barato, te sugiere **abastecerte** (hasta 3 meses, sin que se te acumule de más), aunque todavía no se te acabe, y te dice cuánto ahorras. En Ofertas hay un filtro **🏠 De la casa**. |
+| **Aprende** | Al marcar como comprado en la Lista (o "Ya lo compré" en el artículo) el stock sube. Cuando le dices cuánto queda de verdad, compara con lo que había + lo que compraste y **ajusta el consumo real** de tu casa. |
+| **Marca preferida** | Por artículo (ej. Colgate, Head & Shoulders). Vacío = la más barata. |
+| **Avisos** | Nuevo tipo de aviso: "Se está acabando el papel higiénico (quedan ~2 días)" y "Oferta para abastecerte: detergente −25 % en Walmart". Una vez por vez, sin repetir todos los días. |
 
 ### Novedades de la v4
 
@@ -109,6 +126,9 @@ canasta-sv/
 │  ├─ v4/ticket.js · resumen.js                 Ticket con foto, resumen de ahorro y meta
 │  ├─ v4/avisos.js              Avisos al celular (Web Push)
 │  ├─ v4/recetas-ui.js · ia.js  Recetas de la familia e ideas con IA
+│  ├─ hogar/catalogo.js         Artículos de la casa: consumo estimado, cómo buscarlos en tiendas
+│  ├─ hogar/necesidades.js      Cuánto queda, qué llevar, ofertas para abastecerse, aprender el consumo
+│  ├─ v5/hogar-ui.js            Pestaña "Casa"
 │  ├─ config.js                 URL + llave PÚBLICA de Supabase  ← se edita en el paso 5
 │  └─ manifest.webmanifest, sw.js, icons/
 ├─ supabase/
@@ -116,6 +136,7 @@ canasta-sv/
 │  ├─ migrations/…_menu.sql     Menú semanal compartido + precios por ingrediente
 │  ├─ migrations/…_menu_completo.sql  Términos de ingredientes de desayunos, cenas y refacciones
 │  ├─ migrations/…_v4.sql       Despensa, mercados, avisos, recetas propias, ahorro, historial
+│  ├─ migrations/…_v5_hogar.sql Artículos de la casa, sus compras/reportes y términos para el robot
 │  ├─ functions/ideas/          Edge Function OPCIONAL de IA (Claude Haiku o Gemini)
 │  ├─ functions/precios/        Edge Function "Buscar ahora" (Deno)
 │  ├─ functions/_shared/vtex.mjs  Lector de precios VTEX (lo comparten la función y el robot)
@@ -191,7 +212,7 @@ Para que el costo del menú salga bien, cada producto debe traer su tamaño (`co
 npx supabase link --project-ref <REF>
 npx supabase db push
 ```
-(Alternativa: pegar `supabase/migrations/20261009000000_canasta.sql` en **SQL Editor → Run**. Es idempotente.)
+(Alternativa: pegar cada archivo de `supabase/migrations/`, en orden de nombre, en **SQL Editor → Run**. Son idempotentes.)
 
 Agrega a los miembros del hogar. Los correos **no** se guardan en el repo:
 ```powershell
@@ -324,6 +345,9 @@ Cada quien entra con su correo, que debe estar en `miembros`, y escribe el códi
 - [ ] **v4 · Mercado**: `precios_mercado` tiene el último sondeo y en la Lista aparece la banda "En el mercado sale más barato" cuando aplica.
 - [ ] **v4 · Avisos**: activados en un cel; `node scraper/alertas.mjs --seco` muestra lo que avisaría.
 - [ ] **v4 · Modo súper, escáner, compartir, ticket con foto, 👍/👎, recetas de la familia y resumen de ahorro** funcionan en el cel.
+- [ ] **v5 · Casa**: configurar la casa → aparecen 🔴/🟡/🟢 con "Lleva … en <tienda>"; "Agregar a la lista" las pasa a la Lista (con la etiqueta *casa*); marcarlas compradas sube el stock en Casa; desmarcar lo devuelve.
+- [ ] **v5 · Precios de la casa**: después de la corrida diaria, `node scraper/probar.mjs "pasta dental"` y `"detergente"` traen productos con tamaño (ml/g/und) y en Casa casi nada dice "precio estimado".
+- [ ] **v5 · Avisos de la casa**: `node scraper/alertas.mjs --seco` lista lo que se acaba en ≤ 3 días y ofertas para abastecerse.
 - [ ] `scraper/.env` no está en el repo y `web/config.js` no tiene la llave secreta.
 
 ## Mantenimiento
@@ -334,6 +358,17 @@ Cada quien entra con su correo, que debe estar en `miembros`, y escribe el códi
 - **Una tienda cambió su página**: el workflow falla si no se pudo leer ninguna tienda VTEX. Corre `node scraper/probar.mjs arroz` para ver cuál.
 - **Agregar otra tienda VTEX** (por ejemplo PriceSmart, si usa VTEX): agrégala en `TIENDAS_VTEX` y en la tabla `tiendas`.
 - **Uso responsable**: una consulta al día, con pausas, para uso personal. No subas la frecuencia.
+
+## Cómo decide qué llevar de la casa (v5, $0)
+
+1. **Consumo al mes** de cada artículo = parte fija de la casa + por persona (ej. pasta dental 50 ml por persona; detergente 1 kg fijo + 700 g por persona). Los niños cuentan media. Los números iniciales están en `web/hogar/catalogo.js`.
+2. **Stock estimado** = lo que había la última vez que compraste o reportaste − consumo × días. De ahí salen los días que te quedan.
+3. **Necesidad** = consumo × (días hasta tu próxima compra + 7 de colchón) − stock. Si es mayor que cero, va en la compra.
+4. **Producto**: de los productos de tus tiendas que sí son ese artículo (filtra, por ejemplo, "jabón para ropa" cuando buscas jabón de baño), elige el más barato por unidad, descartando presentaciones que te durarían más de ~4 meses.
+5. **Oferta**: si el más barato por unidad con descuento tiene ≥ 15 % y te cabe sin pasar de 3 meses de consumo, sugiere llevar más. Todo es configurable en Casa → Ajustes.
+6. **Aprender**: cuando dices cuánto queda, `consumo nuevo = 60 % del anterior + 40 % de lo observado` (acotado, para que un dato raro no lo desordene).
+
+El robot diario busca precios de estos artículos con los términos de la migración `_v5_hogar` (y los de marca que elijas en la app).
 
 ## Cómo arma el menú (sin IA, $0)
 

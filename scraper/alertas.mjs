@@ -6,6 +6,8 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { configurado } from './supabase.mjs';
+import { planHogar, textoDias, terminosConMarca } from '../web/hogar/necesidades.js';
+import { terminosHogar } from '../web/hogar/catalogo.js';
 
 const r2 = (n) => Math.round(n * 100) / 100;
 
@@ -77,6 +79,34 @@ export function calcularAvisos(datos, hoy) {
     });
   }
 
+  // 5) Casa: lo que se acaba en ≤ 3 días y ofertas para abastecerse (v5)
+  if ((datos.hogar || []).length) {
+    const cfg = datos.hogarConfig || {};
+    const plan = planHogar(datos.hogar, datos.hogarCands || [], { ...cfg, tiendas: datos.tiendasActivas?.length ? datos.tiendasActivas : null, hoy: new Date(`${hoy}T18:00:00Z`) });
+    // una vez por "episodio": si compras o reportas, cambia stock_fecha y puede volver a avisar
+    const seAcaba = plan.recs.filter((r) => r.motivo === 'comprar' && r.dias <= 3)
+      .map((r) => ({ r, clave: `hogar:${r.art.id}:${String(r.art.stock_fecha || '').slice(0, 10)}` }))
+      .filter((x) => !enviados[x.clave]);
+    if (seAcaba.length) {
+      out.push({
+        tipo: 'hogar', clave: seAcaba[0].clave, claves: seAcaba.map((x) => x.clave), url: './#hogar',
+        titulo: seAcaba.length === 1 ? `🧴 Se está acabando: ${seAcaba[0].r.art.nombre}` : `🧴 Se están acabando ${seAcaba.length} cosas de la casa`,
+        cuerpo: seAcaba.slice(0, 5).map(({ r }) => `${r.art.nombre} (${r.dias < 0.5 ? 'se acabó' : textoDias(r.dias).replace('~', 'quedan ~')})`).join(', '),
+      });
+    }
+    const ofertas = plan.recs.filter((r) => r.oferta && r.producto)
+      .map((r) => ({ r, clave: `hogarOferta:${r.art.id}:${r.producto.id}:${r.producto.precio}` }))
+      .filter((x) => !enviados[x.clave]);
+    if (ofertas.length) {
+      const nombre = (t) => datos.nombresTienda?.[t] || t;
+      out.push({
+        tipo: 'hogar', clave: ofertas[0].clave, claves: ofertas.map((x) => x.clave), url: './#hogar',
+        titulo: ofertas.length === 1 ? `🏷️ Oferta para abastecerte: ${ofertas[0].r.art.nombre}` : `🏷️ ${ofertas.length} ofertas para abastecer la casa`,
+        cuerpo: ofertas.slice(0, 4).map(({ r }) => `${r.art.nombre} −${r.oferta.pct}% en ${nombre(r.producto.tienda)} (lleva ${r.paquetes}, ahorras $${r.oferta.ahorro.toFixed(2)})`).join('\n'),
+      });
+    }
+  }
+
   // 4) Sábado: armar el menú de la semana que viene
   if (diaSemana(hoy) === 6 && !datos.menuSiguiente) {
     nuevo({ tipo: 'menu', clave: `menu:${hoy}`, url: './#menu', titulo: '🍽 Arma el menú de la semana', cuerpo: 'Ya están los precios de hoy. En 2 minutos queda la semana y la lista del súper.' });
@@ -103,8 +133,8 @@ export async function correrAlertas({ seco = false } = {}) {
   const lunesSiguiente = sumarDias(hoy, ((8 - diaSemana(hoy)) % 7) || 7);
 
   // La llave secreta ve todos los hogares: se calcula y se envía por separado para cada uno,
-  // así nadie recibe avisos de la lista, gastos o despensa de otro hogar.
-  const [miembros, subs, lista, presupuestos, gastos, despensa, menus, ajustes, tiendas] = await Promise.all([
+  // así nadie recibe avisos de la lista, gastos, despensa o artículos de la casa de otro hogar.
+  const [miembros, subs, lista, presupuestos, gastos, despensa, menus, ajustes, tiendas, articulos] = await Promise.all([
     rest('miembros?select=email,hogar'),
     rest('avisos_suscripciones?select=*'),
     rest('lista?select=hogar,nombre,productos,comprado&comprado=eq.false'),
@@ -112,8 +142,9 @@ export async function correrAlertas({ seco = false } = {}) {
     rest(`gastos?select=hogar,monto&fecha=gte.${mes}&fecha=lt.${finMes}`),
     rest('despensa?select=hogar,nombre,cantidad,caduca&caduca=not.is.null'),
     rest(`menus?select=hogar,semana&semana=eq.${lunesSiguiente}`),
-    rest('ajustes?select=hogar,valor&clave=eq.avisos_enviados'),
+    rest('ajustes?select=hogar,clave,valor&clave=in.(avisos_enviados,hogar_config,tiendas_cercanas)'),
     rest('tiendas?select=id,nombre'),
+    rest('hogar_articulos?select=*&activo=eq.true').catch(() => []), // antes de aplicar la migración v5
   ]);
   const hogarDe = new Map(miembros.map((m) => [m.email.toLowerCase(), m.hogar]));
   const ids = [...new Set(lista.flatMap((i) => i.productos || []))];
@@ -121,19 +152,26 @@ export async function correrAlertas({ seco = false } = {}) {
   const productos = ids.length ? (await rest(`productos?select=id,nombre,tienda,precio&id=in.(${ids.join(',')})`))
     .map((p) => ({ ...p, tienda_nombre: nombresTienda[p.tienda] })) : [];
   const resumen = ids.length ? await rest('rpc/resumen_precios', { method: 'POST', body: JSON.stringify({ ids }) }) : [];
+  // precios de los artículos de la casa: son de todos, se piden una sola vez
+  const hogarCands = articulos.length
+    ? await rest('rpc/candidatos_ingredientes', { method: 'POST', body: JSON.stringify({ terminos: [...terminosHogar(), ...terminosConMarca(articulos)], por_termino: 30 }) })
+      .then((rs) => rs.map((p) => ({ ...p, contenido: Number(p.contenido), precio: Number(p.precio), precio_lista: p.precio_lista == null ? null : Number(p.precio_lista) })))
+    : [];
   const de = (filas, h) => filas.filter((f) => f.hogar === h);
 
   let webpush = null;
   let total = 0;
   let enviadosOk = 0;
-  for (const hogar of [...new Set(miembros.map((m) => m.hogar))]) {
-    const enviados = de(ajustes, hogar)[0]?.valor || {};
+  for (const h of [...new Set(miembros.map((m) => m.hogar))]) {
+    const ajuste = (k) => ajustes.find((a) => a.hogar === h && a.clave === k)?.valor;
+    const enviados = ajuste('avisos_enviados') || {};
     const avisos = calcularAvisos({
-      lista: de(lista, hogar), productos, resumen, presupuestos: de(presupuestos, hogar), gastos: de(gastos, hogar),
-      despensa: de(despensa, hogar), menuSiguiente: de(menus, hogar).length > 0, enviados,
+      lista: de(lista, h), productos, resumen, presupuestos: de(presupuestos, h), gastos: de(gastos, h),
+      despensa: de(despensa, h), menuSiguiente: de(menus, h).length > 0, enviados,
+      hogar: de(articulos, h), hogarCands, hogarConfig: ajuste('hogar_config'), tiendasActivas: ajuste('tiendas_cercanas'), nombresTienda,
     }, hoy);
     total += avisos.length;
-    console.log(`Avisos para hoy (${hoy}), hogar ${hogar}: ${avisos.length}`);
+    console.log(`Avisos para hoy (${hoy}), hogar ${h}: ${avisos.length}`);
     avisos.forEach((a) => console.log(` - [${a.tipo}] ${a.titulo} — ${a.cuerpo.replace(/\n/g, ' | ')}`));
     if (seco || !avisos.length) continue;
 
@@ -145,7 +183,7 @@ export async function correrAlertas({ seco = false } = {}) {
       webpush = (await import('web-push')).default;
       webpush.setVapidDetails(process.env.VAPID_SUBJECT || 'mailto:canasta@example.com', process.env.VAPID_PUBLIC_KEY, process.env.VAPID_PRIVATE_KEY);
     }
-    for (const s of subs.filter((x) => hogarDe.get(String(x.email).toLowerCase()) === hogar)) {
+    for (const s of subs.filter((x) => hogarDe.get(String(x.email).toLowerCase()) === h)) {
       for (const a of avisos) {
         if (s.prefs?.[a.tipo] === false) continue;
         try {
@@ -164,10 +202,10 @@ export async function correrAlertas({ seco = false } = {}) {
     // recordar lo enviado en ese hogar (y olvidar lo de hace más de 40 días)
     const limite = sumarDias(hoy, -40);
     const nuevos = Object.fromEntries(Object.entries(enviados).filter(([, f]) => f >= limite));
-    avisos.forEach((a) => { nuevos[a.clave] = hoy; });
+    avisos.forEach((a) => (a.claves || [a.clave]).forEach((c) => { nuevos[c] = hoy; }));
     await rest('ajustes?on_conflict=hogar,clave', {
       method: 'POST', headers: { Prefer: 'resolution=merge-duplicates' },
-      body: JSON.stringify({ hogar, clave: 'avisos_enviados', valor: nuevos }),
+      body: JSON.stringify({ hogar: h, clave: 'avisos_enviados', valor: nuevos }),
     });
   }
   console.log(`Enviados: ${enviadosOk}`);

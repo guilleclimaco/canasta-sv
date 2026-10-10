@@ -68,7 +68,7 @@ export const INGREDIENTES = {
   // ---------- lácteos ----------
   queso_duro: { nombre: 'Queso duro', terminos: ['queso duro'], unidad: 'g', ref: 0.99, excluir: SIN_PROCESADOS },
   quesillo: { nombre: 'Quesillo', terminos: ['quesillo'], unidad: 'g', ref: 0.88, excluir: SIN_PROCESADOS },
-  crema: { nombre: 'Crema', terminos: ['crema salud', 'crema acida', 'crema'], unidad: 'ml', ref: 0.42, excluir: ['dental', 'corporal', 'mano', 'facial', 'afeitar', 'batida', 'cafe', 'helado', 'galleta', 'peinar', 'cabello', 'pastelera', 'zapato', 'sopa', 'maiz', 'cacahuate', 'mani', 'chantilly', 'coco', 'avena'] },
+  crema: { nombre: 'Crema', terminos: ['crema salud', 'crema acida', 'crema'], unidad: 'ml', acepta: ['g'], ref: 0.42, excluir: ['dental', 'corporal', 'mano', 'facial', 'afeitar', 'batida', 'cafe', 'helado', 'galleta', 'peinar', 'cabello', 'pastelera', 'zapato', 'sopa', 'maiz', 'cacahuate', 'mani', 'chantilly', 'coco', 'avena', 'sabor', 'kikitos', 'tomate'] },
   leche: { nombre: 'Leche', terminos: ['leche entera', 'leche'], unidad: 'ml', ref: 0.14, excluir: ['polvo', 'condensada', 'evaporada', 'soya', 'almendra', 'avena', 'coco', 'saborizada', 'chocolate', 'fresa', 'dulce', 'deslactosada', 'bebe', 'formula', 'crema', 'jabon', 'corporal'] },
   margarina: { nombre: 'Margarina', terminos: ['margarina', 'mantequilla'], unidad: 'g', ref: 0.33, excluir: ['mani', 'cacahuate', 'galleta'] },
 

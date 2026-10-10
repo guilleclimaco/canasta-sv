@@ -453,3 +453,40 @@ a, .btn-texto, .tabla-datos summary, .chip-mercado, .ok, .prev-ing .si { color: 
 /* en las hojas (columna flex) los filtros no se encogen: solo la lista hace scroll */
 .hoja > .filtros, .hoja > .fila-orden, .hoja > form, .hoja > h3, .hoja > .btn-texto { flex: none; }
 .filtros > .filtro { flex: none; }
+/* ---------------------------------------------------------------- v5: Casa (cuidado personal y limpieza) */
+.nav { grid-template-columns: repeat(6, 1fr); }
+.nav a { font-size: 10.5px; gap: 2px; }
+.nav a svg { width: 21px; height: 21px; }
+/* estados de la casa con la paleta: agotado/urgente en Crimson, pronto en Dodger, bien en Pacific Cyan */
+:root { --est-agotado: var(--crimson); --est-urgente: color-mix(in srgb, var(--crimson) 72%, var(--blanco)); --est-pronto: var(--dodger); --est-ok: var(--cian); }
+.hogar-item {
+  display: flex; gap: 12px; align-items: flex-start; width: 100%; text-align: left;
+  padding: 12px 14px; background: none; border: 0; border-bottom: 1px solid var(--linea); color: inherit; font: inherit;
+}
+.hogar-item:last-child { border-bottom: 0; }
+.hogar-item .info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.hogar-item .n { font-weight: 650; font-size: 15.5px; }
+.hogar-item .punto { flex: none; width: 10px; height: 10px; border-radius: 50%; margin-top: 6px; background: var(--c, var(--est-ok)); }
+.est-agotado { --c: var(--est-agotado); }
+.est-urgente { --c: var(--est-urgente); }
+.est-pronto { --c: var(--est-pronto); }
+.est-ok { --c: var(--est-ok); }
+.medidor-mini { display: block; height: 5px; border-radius: 999px; background: var(--linea); overflow: hidden; margin: 2px 0; max-width: 220px; }
+.medidor-mini i { display: block; height: 100%; border-radius: 999px; background: var(--c, var(--est-ok)); }
+.llevar { color: var(--tinta); }
+.llevar .badge { font-size: 11.5px; padding: 1px 6px; }
+.estado-art { border-left: 4px solid var(--c); padding: 10px 12px; border-radius: 10px; background: var(--papel); display: flex; flex-direction: column; gap: 2px; }
+.estado-art b { font-size: 18px; color: var(--c); }
+.tabla-queda { display: flex; flex-direction: column; gap: 6px; }
+.fila-queda { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 15px; }
+.fila-queda select { flex: none; width: 46%; }
+details.bien summary { cursor: pointer; list-style: none; }
+details.bien summary::-webkit-details-marker { display: none; }
+details.bien summary::after { content: " ▾"; }
+details.bien[open] summary::after { content: " ▴"; }
+.opcion-hogar { display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+.opcion-hogar .n { min-width: 0; font-size: 14px; }
+.opcion-hogar .precio { flex: none; text-align: right; }
+.opcion-hogar .unit { display: block; }
+/* casa: puntos de estado en los títulos (en vez de emojis de colores fuera de la paleta) */
+.punto-est { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; vertical-align: 1px; background: var(--c); }

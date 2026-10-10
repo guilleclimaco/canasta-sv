@@ -8,6 +8,7 @@ export const TIPOS_AVISO = [
   ['menu', 'Recordatorio para armar el menú (sábado)'],
   ['presupuesto', 'Voy cerca o pasado del presupuesto'],
   ['vence', 'Algo en casa está por vencer'],
+  ['hogar', 'Se acaba algo de la casa (jabón, detergente…) u oferta para abastecerme'],
 ];
 
 export function soporteAvisos() {

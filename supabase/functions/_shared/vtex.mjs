@@ -24,6 +24,7 @@ const UNIDADES = {
   oz: ['g', 28.3495], onz: ['g', 28.3495], onzas: ['g', 28.3495],
   ml: ['ml', 1], mililitros: ['ml', 1], cc: ['ml', 1],
   l: ['ml', 1000], lt: ['ml', 1000], lts: ['ml', 1000], litro: ['ml', 1000], litros: ['ml', 1000],
+  gal: ['ml', 3785.41], galon: ['ml', 3785.41], galones: ['ml', 3785.41],
 };
 
 /**
@@ -47,15 +48,18 @@ export function parsearContenido(nombre) {
   const rango = /\b\d+(?:\.\d+)?\s*(?:g|gr|grs|kg|oz|onz)?\s*(?:a|-)\s*\d+(?:\.\d+)?\s*(?:g|gr|grs|gramos|kg|oz|onz|onzas)\b/;
   const conRango = rango.test(n);
   if (conRango) n = n.replace(rango, ' ');
-  const re = /(\d+(?:\.\d+)?)\s*(kilogramos|kilogramo|kilos|kilo|kg|gramos|gramo|grs|gr|g|libras|libra|lbs|lb|onzas|onz|oz|mililitros|ml|cc|litros|litro|lts|lt|l)(?![a-z])/;
+  const re = /(\d+(?:\.\d+)?)\s*(kilogramos|kilogramo|kilos|kilo|kg|gramos|gramo|grs|gr|g|libras|libra|lbs|lb|onzas|onz|oz|mililitros|ml|cc|litros|litro|lts|lt|l|galones|galon|gal)(?![a-z])/;
   const m = n.match(re);
   let pack = 1;
-  const p = n.match(/(\d+)\s*(?:pack|pk|unidades|unidad|unid|und|uds|u|piezas|pzas|rollos|huevos|tortillas|panes|bolsas|sobres)\b/)
-    || n.match(/\b(?:pack|paquete)\s*(?:de\s*)?(\d+)\b/) || n.match(/\b(\d+)\s*x\s*\d/);
+  // los rollos mandan ("12 rollos 300 hojas" son 12); "hojas" solo cuenta si no hay otra cosa (servilletas)
+  const p = n.match(/(\d+)\s*rollos?\b/)
+    || n.match(/(\d+)\s*(?:pack|pk|unidades|unidad|unid|und|uds|u|piezas|pzas|huevos|tortillas|panes|bolsas|sobres|panales|toallas|servilletas)\b/)
+    || n.match(/\b(?:pack|paquete)\s*(?:de\s*)?(\d+)\b/) || n.match(/\b(\d+)\s*x\s*(?=\d+(?:\.\d+)?\s*(?:kg|g|gr|grs|ml|cc|l|lt|lts|oz|onz|lb|lbs)(?![a-z]))/)
+    || (!m && n.match(/(\d+)\s*hojas\b/));
   if (p) pack = parseInt(p[1], 10) || 1;
   if (conRango && pack > 1) return { contenido: pack, unidad: 'und' };
   if (!m) {
-    if (pack > 1) return { contenido: pack, unidad: 'und' };
+    if (pack > 1 || (p && /rollo|und|unid|pieza|pza/.test(p[0]))) return { contenido: pack, unidad: 'und' };
     // productos a granel: "Tomate por libra", "Papa lb", "Pollo entero kg"
     const granel = n.match(/(?:^|\s)(?:por\s+|x\s+|el\s+|la\s+)?(libra|lb|lbs|kilo|kg)(?:\s|$)/);
     if (granel) return { contenido: ['kilo', 'kg'].includes(granel[1]) ? 1000 : 453.59, unidad: 'g' };
@@ -64,9 +68,12 @@ export function parsearContenido(nombre) {
   }
   const [unidad, factor] = UNIDADES[m[2]];
   let contenido = parseFloat(m[1]) * factor;
-  // "6 x 355 ml": la medida es de cada unidad → multiplicar.
-  // "2 Pack - 4540 g" / "30 uds -1900 g": en estas tiendas la medida ya es el total.
-  if (pack > 1 && p && p.index < m.index && /^\d+\s*x/.test(p[0])) contenido *= pack;
+  // En estas tiendas, "N pack/uds - medida" casi siempre trae el TOTAL ("2 Pack - 4540 g", "Colgate 3 pack - 300 ml",
+  // "Desodorante 3 Pack - 450 ml"). La medida es de CADA unidad solo si el nombre lo dice:
+  // "6 x 355 ml", "2 Uds 67 ml c/u", "2Pack De 354 g" (cuesta igual que el "2 Uds - 708 g").
+  const entre = p && m ? n.slice(p.index + p[0].length, m.index) : '';
+  const porUnidad = p && (/^\d+\s*x/.test(p[0]) || /^\s*de\s*$/.test(entre) || /\bc u\b|\bc\/u\b|\bcada un[oa]\b/.test(n));
+  if (pack > 1 && p && p.index < m.index && porUnidad) contenido *= pack;
   return { contenido: Math.round(contenido * 100) / 100, unidad };
 }
 

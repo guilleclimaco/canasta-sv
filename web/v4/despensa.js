@@ -61,6 +61,8 @@ function caducaDe(ingrediente) {
 
 /** Al marcar como comprado un artículo de la lista */
 export async function agregarDesdeItem(item) {
+  // artículos de la casa (v5): suben su propio stock, no entran a la despensa de comida
+  if (item.articulo_casa) return (await import('../v5/hogar-ui.js')).compraDesdeLista(item);
   const ingrediente = item.ingrediente || buscarIngrediente(item.nombre);
   const ing = INGREDIENTES[ingrediente];
   const op = mejorOpcion(item) || (item.opciones || [])[0];
@@ -78,6 +80,7 @@ export async function agregarDesdeItem(item) {
 
 /** Al desmarcar: quita lo último que entró con ese nombre */
 export async function quitarDesdeItem(item) {
+  if (item.articulo_casa) return (await import('../v5/hogar-ui.js')).deshacerCompraDesdeLista(item);
   const ingrediente = item.ingrediente || buscarIngrediente(item.nombre);
   const nombre = INGREDIENTES[ingrediente]?.nombre || item.nombre;
   const fila = [...estado.despensa].reverse().find((d) => d.nombre === nombre);
@@ -180,5 +183,6 @@ export function vistaDespensa(cont) {
 }
 
 export function avisoEntro(item) {
+  if (item.articulo_casa) return aviso(`${item.nombre}: anotado en Casa`);
   aviso(`${item.nombre} pasó a "En casa"`);
 }

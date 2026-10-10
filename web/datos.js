@@ -83,8 +83,8 @@ async function crearReal() {
         opciones: (i.productos || []).map((id) => mapa.get(id)).filter(Boolean),
       }));
     },
-    async agregarItem({ nombre, cantidad = 1, categoria = 'Súper', productos = [], ingrediente = null }) {
-      const fila = ok(await sb.from('lista').insert({ nombre, cantidad, categoria, productos, ingrediente }).select().single());
+    async agregarItem({ nombre, cantidad = 1, categoria = 'Súper', productos = [], ingrediente = null, articulo_casa = null }) {
+      const fila = ok(await sb.from('lista').insert({ nombre, cantidad, categoria, productos, ingrediente, articulo_casa }).select().single());
       // que el robot diario también revise este artículo
       await sb.from('terminos').upsert({ termino: normalizar(nombre) }, { onConflict: 'termino', ignoreDuplicates: true });
       return fila;
@@ -216,6 +216,42 @@ async function crearReal() {
       ok(await sb.from('recetas_propias').delete().eq('id', id));
     },
     // ---- v4: ideas con IA (opcional; la función "ideas" debe estar desplegada) ----
+    // ---- v5: artículos de la casa (por necesidad) ----
+    async hogarArticulos() {
+      return ok(await sb.from('hogar_articulos').select('*').order('categoria').order('nombre')).map((a) => ({
+        ...a, consumo_mes: Number(a.consumo_mes), stock: Number(a.stock), usuarios: a.usuarios == null ? null : Number(a.usuarios),
+        ref_stock: a.ref_stock == null ? null : Number(a.ref_stock), compras_desde: Number(a.compras_desde || 0),
+      }));
+    },
+    async crearHogarArticulos(filas) {
+      return ok(await sb.from('hogar_articulos').insert(filas).select());
+    },
+    async actualizarHogarArticulo(id, cambios) {
+      ok(await sb.from('hogar_articulos').update(cambios).eq('id', id));
+    },
+    async movimientoHogar(m) {
+      return ok(await sb.from('hogar_movimientos').insert(m).select().single());
+    },
+    async movimientosHogar(articuloId, limite = 12) {
+      return ok(await sb.from('hogar_movimientos').select('*').eq('articulo_id', articuloId).order('fecha', { ascending: false }).limit(limite));
+    },
+    async borrarMovimientoHogar(id) {
+      ok(await sb.from('hogar_movimientos').delete().eq('id', id));
+    },
+    async ultimoMovimientoDeLista(listaId) {
+      return ok(await sb.from('hogar_movimientos').select('*').eq('lista_id', listaId).order('fecha', { ascending: false }).limit(1).maybeSingle());
+    },
+    async candidatosHogar(terminos) {
+      return ok(await sb.rpc('candidatos_ingredientes', { terminos, por_termino: 30 })).map(num);
+    },
+    async agregarTerminos(terminos) {
+      if (terminos.length) await sb.from('terminos').upsert(terminos.map((termino) => ({ termino })), { onConflict: 'termino', ignoreDuplicates: true });
+    },
+    escucharHogar(cb) {
+      const canal = sb.channel('hogar-compartido')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'hogar_articulos' }, cb).subscribe();
+      return () => sb.removeChannel(canal);
+    },
     async ideasIA(pedido) {
       const { data, error } = await sb.functions.invoke('ideas', { body: pedido });
       if (error) throw error;
@@ -252,6 +288,20 @@ function crearDemo() {
     ['Queso Duro Blando 1 lb', 453.59, 'g', { walmart: [4.4, 4.4], selectos: [4.25, 4.25] }],
     ['Pechuga de Pollo 1 lb', 453.59, 'g', { walmart: [2.75, 2.75], maxi: [2.69, 2.69], selectos: [2.59, 2.99] }],
     ['Pan Bimbo Blanco Grande 680 g', 680, 'g', { walmart: [3.1, 3.1], maxi: [2.99, 2.99], donjuan: [3.05, 3.05], selectos: [3.15, 3.15] }],
+    // artículos de la casa (v5)
+    ['Pasta Dental Colgate Triple Acción 100 ml', 100, 'ml', { walmart: [2.5, 2.5], maxi: [2.35, 2.35], donjuan: [2.45, 2.45], selectos: [2.6, 2.6] }],
+    ['Pasta Dental Colgate 3 Pack 75 ml', 225, 'ml', { walmart: [4.95, 5.5], maxi: [4.8, 4.8] }],
+    ['Jabón de Tocador Protex 3 Pack 110 g', 330, 'g', { walmart: [2.85, 2.85], maxi: [2.75, 2.75], selectos: [2.25, 2.95] }],
+    ['Shampoo Sedal 650 ml', 650, 'ml', { walmart: [5.25, 5.25], maxi: [4.95, 4.95], selectos: [5.4, 5.4] }],
+    ['Shampoo Head & Shoulders 375 ml', 375, 'ml', { walmart: [5.9, 5.9], selectos: [4.75, 5.95] }],
+    ['Desodorante Rexona Aerosol 150 ml', 150, 'ml', { walmart: [3.95, 3.95], maxi: [3.85, 3.85], donjuan: [3.9, 3.9] }],
+    ['Suavizante Suavitel 1 L', 1000, 'ml', { walmart: [2.6, 2.6], maxi: [2.45, 2.45] }],
+    ['Cloro Magia Blanca 1 L', 1000, 'ml', { walmart: [0.95, 0.95], maxi: [0.9, 0.9], donjuan: [0.89, 0.89], selectos: [0.99, 0.99] }],
+    ['Fabuloso Lavanda 1 L', 1000, 'ml', { walmart: [2.4, 2.4], maxi: [1.85, 2.4], selectos: [2.35, 2.35] }],
+    ['Lavaplatos Axion Limón 750 ml', 750, 'ml', { walmart: [2.75, 2.75], maxi: [2.6, 2.6] }],
+    ['Esponja Scotch Brite 3 und', 3, 'und', { walmart: [1.25, 1.25], maxi: [1.2, 1.2] }],
+    ['Bolsas para basura Glad 10 und', 10, 'und', { walmart: [1.5, 1.5], maxi: [1.35, 1.35] }],
+    ['Cepillo Dental Colgate 2 und', 2, 'und', { walmart: [2.5, 2.5], maxi: [2.3, 2.9] }],
   ];
   let sig = 1;
   const productos = [];
@@ -287,10 +337,34 @@ function crearDemo() {
     { id: 2, ingrediente: 'pollo_piezas', nombre: 'Pollo en piezas', cantidad: 900, unidad: 'g', caduca: enDias(1) },
     { id: 3, ingrediente: 'tomate', nombre: 'Tomate', cantidad: 400, unidad: 'g', caduca: enDias(3) },
     { id: 4, ingrediente: 'huevo', nombre: 'Huevos', cantidad: 6, unidad: 'und', caduca: enDias(15) },
-    { id: 5, ingrediente: null, nombre: 'Jabón de baño', cantidad: null, unidad: null, caduca: null },
+    { id: 5, ingrediente: null, nombre: 'Salsa inglesa', cantidad: null, unidad: null, caduca: null },
   ];
   let idDesp = 100;
   let recetasPropias = [];
+  // casa (v5): consumos de una familia de 3 (2 adultos y 2 niños)
+  const haceDias = (n) => new Date(Date.now() - n * 86400000).toISOString();
+  let hogar = [
+    ['papel_higienico', 'Papel higiénico', 'personal', 'und', 21, 3, 5],
+    ['pasta_dental', 'Pasta dental', 'personal', 'ml', 150, 90, 3],
+    ['jabon_bano', 'Jabón de baño', 'personal', 'g', 450, 600, 2],
+    ['shampoo', 'Shampoo', 'personal', 'ml', 450, 700, 4],
+    ['desodorante', 'Desodorante', 'personal', 'ml', 160, 280, 6],
+    ['cepillo_dientes', 'Cepillo de dientes', 'personal', 'und', 1, 3, 20],
+    ['detergente_ropa', 'Detergente para ropa', 'limpieza', 'g', 3100, 3500, 3],
+    ['suavizante', 'Suavizante de ropa', 'limpieza', 'ml', 900, 1500, 3],
+    ['cloro', 'Cloro / lejía', 'limpieza', 'ml', 1450, 150, 2],
+    ['desinfectante_piso', 'Desinfectante para piso (olor)', 'limpieza', 'ml', 1500, 2200, 4],
+    ['lavaplatos', 'Lavaplatos', 'limpieza', 'ml', 750, 500, 5],
+    ['esponjas', 'Esponjas de cocina', 'limpieza', 'und', 3, 2, 7],
+    ['bolsas_basura', 'Bolsas para basura', 'limpieza', 'und', 30, 25, 3],
+  ].map(([catalogo, nombre, categoria, unidad, consumo_mes, stock, dias], i) => ({
+    id: i + 1, catalogo, nombre, categoria, unidad, consumo_mes, stock, stock_fecha: haceDias(dias), marca: null,
+    usuarios: null, ref_stock: stock, ref_fecha: haceDias(dias + 25), compras_desde: 0, activo: true,
+  }));
+  if (typeof location !== 'undefined' && new URLSearchParams(location.search).has('casa-vacia')) hogar = []; // para probar la configuración inicial
+  let movHogar = [];
+  let idHogar = 100;
+  let idMov = 1;
   // historial inventado: lo que está en oferta "bajó" hace 2 días
   const resumenDemo = (p) => (p.precio < p.precio_lista
     ? { producto_id: p.id, min60: p.precio, max60: p.precio_lista, prom60: (p.precio + p.precio_lista) / 2, puntos: [[enDias(-40), p.precio_lista], [enDias(-15), p.precio_lista + 0.1], [enDias(-2), p.precio]] }
@@ -338,6 +412,19 @@ function crearDemo() {
       await espera();
       return [...lista].sort((a, b) => a.comprado - b.comprado || a.id - b.id).map(conOpciones);
     },
+    async hogarArticulos() { return hogar.map((a) => ({ ...a })); },
+    async crearHogarArticulos(filas) { const nuevas = filas.map((f) => ({ id: idHogar++, compras_desde: 0, activo: true, stock_fecha: new Date().toISOString(), ...f })); hogar.push(...nuevas); return nuevas; },
+    async actualizarHogarArticulo(id, c) { hogar = hogar.map((a) => (a.id === id ? { ...a, ...c } : a)); },
+    async movimientoHogar(m) { const fila = { id: idMov++, fecha: new Date().toISOString(), ...m }; movHogar.push(fila); return fila; },
+    async movimientosHogar(id) { return movHogar.filter((m) => m.articulo_id === id).sort((a, b) => b.fecha.localeCompare(a.fecha)); },
+    async borrarMovimientoHogar(id) { movHogar = movHogar.filter((m) => m.id !== id); },
+    async ultimoMovimientoDeLista(listaId) { return movHogar.filter((m) => m.lista_id === listaId).at(-1) || null; },
+    async candidatosHogar(terminos) {
+      await espera();
+      return terminos.flatMap((t) => productos.filter((p) => p.contenido && t.split(' ').every((w) => p.busqueda.includes(w))).map((p) => ({ ...p, termino: t })));
+    },
+    async agregarTerminos() {},
+    escucharHogar() { return () => {}; },
     async agregarItem(it) {
       const fila = { id: idItem++, cantidad: 1, categoria: 'Súper', productos: [], comprado: false, ...it };
       lista.push(fila);

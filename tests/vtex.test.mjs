@@ -98,3 +98,16 @@ test('buscarTodo reporta errores sin caerse', async () => {
   assert.equal(filas.length, 0);
   assert.equal(errores.length, 3);
 });
+
+test('tamaños de artículos de la casa (v5)', async () => {
+  const { parsearContenido } = await import('../supabase/functions/_shared/vtex.mjs');
+  const casos = [
+    ['Papel Higiénico Scott 12 Rollos', 12, 'und'], ['Papel Higienico Rosal 300 hojas 4 rollos', 4, 'und'],
+    ['Papel Toalla Scott 1 rollo 100 hojas', 1, 'und'], ['Servilletas Scott 200 hojas', 200, 'und'],
+    ['Pasta Dental Colgate Total Original Mint 3 pack - 300 ml', 300, 'ml'], ['Pasta Dental Oral-B 3D White Blanqueadora - 2 Uds 67 ml c/u', 134, 'ml'],
+    ['Arroz Omoa Blanco 2Pack De 354 g', 708, 'g'], ['Desodorante Dove Spray Dermoaclarante 3 Pack -450 ml', 450, 'ml'], ['Desinfectante Fabuloso Multiusos Fusion Perfecta - 1 gal', 3785.41, 'ml'],
+    ['Desodorante Antitranspirante Speed Stick 24/7 X5 Multi-Protect Gel - 85 g', 85, 'g'], ['Bolsas para basura Glad 10 und', 10, 'und'],
+    ['Pañales Huggies Etapa 3 40 Unidades', 40, 'und'], ['Detergente Rinso 2 kg', 2000, 'g'],
+  ];
+  for (const [n, c, u] of casos) assert.deepEqual(parsearContenido(n), { contenido: c, unidad: u }, n);
+});

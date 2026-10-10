@@ -72,6 +72,13 @@ test('productoValido: nombres reales que se colaban (oct 2026)', () => {
   si('chorizo', 'Chorizo Criollo Precocido 340 g');
   si('papa', 'Papa Americana - 2 a 4 Unidades Aproximadamente, precio Indicado Por Libra (454 g)');
   si('leche', 'Leche Entera Sula Uht Elecster - 946 ml', 'ml');
+  // empieza con otro alimento del catálogo (aunque traiga un número o "pack" adelante)
+  no('margarina', 'Palomitas Great Value De Maíz Extra Mantequilla - 85 g');
+  no('crema', '6 Pack Kikitos Pan Sinai Sabor Crema Dulce 324 g');
+  si('margarina', 'Mantequilla Dos Pinos Sin Sal 454 g');
+  si('pechuga', 'Filete De Pechuga Pollo Indio Deshuesada - Precio Indicado Por Libra (454 g)');
+  // la crema se vende en gramos aunque la receta la mida en ml
+  si('crema', 'Crema Pasteurizada Salud 25 grasa - 750 g');
 });
 
 test('productoValido descarta productos que no son el ingrediente', () => {

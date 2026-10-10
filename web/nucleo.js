@@ -4,7 +4,7 @@ export const $ = (s, el = document) => el.querySelector(s);
 export const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 export const dinero = (n) => (n == null || Number.isNaN(n) ? '—' : `$${Number(n).toFixed(2)}`);
-export const CATEGORIAS = ['Súper', 'Mercado', 'Limpieza', 'Farmacia', 'Otros'];
+export const CATEGORIAS = ['Súper', 'Mercado', 'Limpieza', 'Cuidado personal', 'Farmacia', 'Otros'];
 export const hoyISO = () => new Date().toLocaleDateString('en-CA');
 export const sumarDias = (iso, n) => {
   const d = new Date(`${iso}T12:00:00`);
@@ -49,6 +49,10 @@ export const estado = {
   mes: mesActual(),
   filtroOferta: 'todas',
   soloMiLista: false,
+  soloCasa: false,
+  hogar: [],
+  hogarCands: [],
+  hogarCargado: false,
   gastoMes: 0,
   presupuestoMes: 0,
 };

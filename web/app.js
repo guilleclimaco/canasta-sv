@@ -23,18 +23,21 @@ import { TIPOS_AVISO, soporteAvisos, estadoAvisos, activarAvisos, desactivarAvis
 import { abrirMisRecetas, recargarRecetasPropias } from './v4/recetas-ui.js';
 import { abrirIdeasIA } from './v4/ia.js';
 import { pintarResumen } from './v4/resumen.js';
+import { vistaHogar, cargarHogar, esDeLaCasa } from './v5/hogar-ui.js';
 
 const ICONOS = {
   lista: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1.2" fill="currentColor"/><circle cx="4.5" cy="12" r="1.2" fill="currentColor"/><circle cx="4.5" cy="18" r="1.2" fill="currentColor"/></svg>',
   comparar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 20V10M12 20V4M19 20v-7"/></svg>',
   ofertas: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M3 12V4h8l10 10-8 8z"/><circle cx="7.5" cy="8.5" r="1.5" fill="currentColor"/></svg>',
   gastos: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="6" width="18" height="13" rx="2.5"/><path d="M3 10h18M7 15h3"/></svg>',
+  hogar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7"/><path d="M5 10v10h14V10"/><path d="M10 20v-5h4v5"/></svg>',
   menu: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="13" r="6.5"/><path d="M3 4v6a2 2 0 0 0 2 2M5 4v16M21 4c-1.5 1-2 3-2 6h2v10"/></svg>',
   ajustes: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>',
 };
 const PESTANAS = [
   ['lista', 'Lista'],
   ['menu', 'Menú'],
+  ['hogar', 'Casa'],
   ['comparar', 'Comprar'],
   ['ofertas', 'Ofertas'],
   ['gastos', 'Gastos'],
@@ -67,6 +70,12 @@ async function iniciar() {
       debounce(() => {
         estado.menuCargado = false;
         if (estado.tab === 'menu') render();
+      }, 400),
+    );
+    D.escucharHogar?.(
+      debounce(() => {
+        estado.hogarCargado = false;
+        if (estado.tab === 'hogar') render();
       }, 400),
     );
     D.escucharDespensa(
@@ -190,7 +199,7 @@ function irA(tab) {
 function render() {
   const v = $('#vista');
   if (!v) return;
-  ({ lista: vistaLista, menu: vistaMenu, comparar: vistaComparar, ofertas: vistaOfertas, gastos: vistaGastos })[estado.tab](v);
+  ({ lista: vistaLista, menu: vistaMenu, hogar: vistaHogar, comparar: vistaComparar, ofertas: vistaOfertas, gastos: vistaGastos })[estado.tab](v);
 }
 
 // ---------------------------------------------------------------- LISTA
@@ -302,7 +311,7 @@ function filaItem(i) {
     <article class="item ${i.comprado ? 'hecho' : ''}" data-id="${i.id}">
       <button class="check" aria-label="${i.comprado ? 'Desmarcar' : 'Marcar comprado'}"></button>
       <button class="info">
-        <div class="nombre">${esc(i.nombre)} ${i.cantidad !== 1 ? `<span class="cant">×${i.cantidad}</span>` : ''}</div>
+        <div class="nombre">${esc(i.nombre)} ${i.cantidad !== 1 ? `<span class="cant">×${i.cantidad}</span>` : ''}${i.articulo_casa ? ' <span class="tag">casa</span>' : ''}</div>
         <div class="sub ${m ? '' : 'aviso'}">${sub}${i.comprado ? '' : etiquetaPrecio(i)}</div>
       </button>
       <button class="mas" aria-label="Opciones">⋯</button>
@@ -1153,7 +1162,7 @@ function vistaComparar(v) {
 async function vistaOfertas(v) {
   v.innerHTML = '<div class="cargando"><div class="giro"></div></div>';
   let ofertas = [];
-  try { ofertas = await D.ofertas(); } catch (e) { errorAviso(e); }
+  try { [ofertas] = await Promise.all([D.ofertas(), cargarHogar().catch(() => {})]); } catch (e) { errorAviso(e); }
   if (estado.tab !== 'ofertas') return;
   const palabras = estado.lista.map((i) => normalizar(i.nombre)).filter(Boolean);
   const f = estado.filtrosOfertas ||= { q: '', tipo: 'todo', min: 0, orden: 'descuento' };
@@ -1174,6 +1183,7 @@ async function vistaOfertas(v) {
   const pintar = () => {
     $('#f-tienda', v).innerHTML = `
       <button class="filtro" data-f="mi" aria-pressed="${estado.soloMiLista}">De mi lista</button>
+      ${(estado.hogar || []).length ? `<button class="filtro" data-f="casa" aria-pressed="${!!estado.soloCasa}">🏠 De la casa</button>` : ''}
       <button class="filtro" data-f="todas" aria-pressed="${estado.filtroOferta === 'todas'}">Todas las tiendas</button>
       ${tiendasActivas().map((t) => `<button class="filtro" data-f="${esc(t)}" aria-pressed="${estado.filtroOferta === t}">${esc(tiendaCorta(t))}</button>`).join('')}`;
     $$('[data-tipo]', v).forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.tipo === f.tipo)));
@@ -1184,6 +1194,7 @@ async function vistaOfertas(v) {
     let o = ofertas.filter((x) => tiendasActivas().includes(x.tienda));
     if (estado.filtroOferta !== 'todas') o = o.filter((x) => x.tienda === estado.filtroOferta);
     if (estado.soloMiLista) o = o.filter((x) => palabras.some((w) => x.busqueda?.includes(w)));
+    if (estado.soloCasa) o = o.filter(esDeLaCasa);
     if (ws.length) o = o.filter((x) => { const n = normalizar(`${x.nombre} ${x.busqueda || ''}`).split(/[^a-z0-9]+/); return ws.every((w) => n.some((y) => y.startsWith(w))); });
     if (f.tipo !== 'todo') o = o.filter((x) => esNoComida(x.nombre) === (f.tipo === 'hogar'));
     if (f.min) o = o.filter((x) => Number(x.descuento_pct) >= f.min);
@@ -1205,6 +1216,7 @@ async function vistaOfertas(v) {
       : `<div class="vacio tarjeta"><b>No hay ofertas con ese filtro</b>Quita algún filtro. El robot revisa precios cada mañana; las bajas aparecen aquí.</div>`;
     $$('#f-tienda .filtro', v).forEach((b) => (b.onclick = () => {
       if (b.dataset.f === 'mi') estado.soloMiLista = !estado.soloMiLista;
+      else if (b.dataset.f === 'casa') estado.soloCasa = !estado.soloCasa;
       else estado.filtroOferta = b.dataset.f;
       pintar();
     }));

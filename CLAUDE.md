@@ -1,7 +1,7 @@
 # CLAUDE.md — Canasta SV
 
 Objetivo: dejar funcionando la app Canasta (lista del súper + menú semanal (desayunos, refacciones, almuerzos y cenas) + presupuesto +
-comparador de precios de supermercados de El Salvador) con **costo $0**, accesible desde el iPhone de Guille y el Android
+comparador de precios de supermercados de El Salvador + artículos de la casa (cuidado personal y limpieza) por necesidad) con **costo $0**, accesible desde el iPhone de Guille y el Android
 de su tía desde cualquier lugar.
 
 ## Qué hacer
@@ -19,7 +19,7 @@ de su tía desde cualquier lugar.
 - Selectos (`scraper/selectos.mjs`) está **sin verificar** contra la página real: usa `--descubrir` y ajusta.
 - Pide a Guille solo lo que no puedas hacer (crear cuentas, iniciar sesión en el navegador, pegar llaves).
 
-- Si el proyecto ya estaba instalado y llegó una actualización, sigue `ACTUALIZAR-V4.md` (incluye todo lo anterior).
+- Si el proyecto ya estaba instalado y llegó una actualización, sigue `ACTUALIZAR-V5.md` (incluye todo lo anterior).
 - La IA es OPCIONAL y la activa Guille: no despliegues la función `ideas` ni pidas llaves de IA si él no lo pide.
 - Ningún dato personal (correos, nombres) se manda a la IA: solo comida y precios (`web/v4/ia.js → pedidoIdeas`).
 

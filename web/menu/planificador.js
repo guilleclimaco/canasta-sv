@@ -63,11 +63,19 @@ export function esNoComida(nombre) {
   return NO_COMIDA.some((ex) => (ex.includes(' ') ? n.includes(ex) : palabras.some((w) => (ex.length >= 4 ? w.startsWith(ex) : w === ex))));
 }
 
+// Palabras con las que empiezan los productos que SON otro alimento: la lista fija (salsa, sopa, jugo…) más la
+// primera palabra de cada término del catálogo ("Palomitas … mantequilla" no es margarina; "Pan … con mantequilla"
+// tampoco). "Filete" es genérico: "Filete de pechuga" sí es pechuga.
+const GENERICAS = new Set(['filete']);
+const OTROS = [...new Set([...OTRO_ALIMENTO, ...Object.values(INGREDIENTES).flatMap((i) => (i.terminos || []).map((t) => t.split(' ')[0]))])]
+  .filter((w) => !GENERICAS.has(w));
+
 /** ¿Este producto de tienda sirve como este ingrediente? */
 export function productoValido(ingId, p) {
   const ing = INGREDIENTES[ingId];
   if (!ing || ing.basico || !p) return false;
-  if (p.unidad !== ing.unidad || !p.contenido || !p.precio) return false;
+  // `acepta`: otra unidad que vale lo mismo (la crema se vende en g y la receta la mide en ml; 1 g ≈ 1 ml)
+  if ((p.unidad !== ing.unidad && !(ing.acepta || []).includes(p.unidad)) || !p.contenido || !p.precio) return false;
   const nombre = normal(p.busqueda || p.nombre);
   const palabras = nombre.split(/[^a-z0-9]+/).filter(Boolean);
   // cada palabra del término debe ser una palabra completa del producto, o su plural
@@ -86,8 +94,9 @@ export function productoValido(ingId, p) {
   // productos que no son comida (jabón de avena, exprimidor de limón…)
   if (NO_COMIDA.some((ex) => !propias.has(ex) && tiene(ex))) return false;
   // empieza con otro alimento: "Frijoles con chorizo" no es chorizo
-  const primera = normal(p.nombre || p.busqueda).split(/[^a-z0-9]+/).find(Boolean) || '';
-  if (OTRO_ALIMENTO.some((a) => esPalabra(primera, a) && ![...propias].some((w) => esPalabra(primera, w)))) return false;
+  // primera palabra de verdad: "6 Pack Kikitos…" empieza con kikitos, no con 6
+  const primera = normal(p.nombre || p.busqueda).split(/[^a-z0-9]+/).find((w) => w && !/^\d/.test(w) && !['pack', 'paquete', 'pk'].includes(w)) || '';
+  if (OTROS.some((a) => esPalabra(primera, a) && ![...propias].some((w) => esPalabra(primera, w)))) return false;
   return true;
 }
 
