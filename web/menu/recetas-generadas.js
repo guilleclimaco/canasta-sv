@@ -484,7 +484,7 @@ const TIPICOS = [
     ['Cocina la yuca en agua con sal hasta que esté suave.', 'Fríela en trozos hasta dorar.', 'Sirve con chicharrón, curtido y salsa de tomate.'], ['cena', 'refaccion']),
   T('empanadas-leche', 'Empanadas de plátano con leche', 50, 'vegetal', 4, ['tradicional', 'dulce', 'frito'],
     [['platano', 4], ['leche', 400], ['azucar', 1], ['maicena', 1], ['canela', 1], ['aceite', 200]],
-    ['Cocina el plátano maduro y hazlo puré.', 'Prepara un poleadito con leche, azúcar, maicena y canela.', 'Rellena discos de plátano, ciérralos y fríe.'], ['refaccion', 'cena']),
+    ['Cocina el plátano maduro y hazlo puré.', 'Prepara un poleadito con leche, azúcar, maicena y canela.', 'Rellena discos de plátano, ciérralos y fríe.'], ['refaccion']),
   T('quesadillas-tortilla-loroco', 'Tortillas con quesillo y loroco', 15, 'vegetal', 4, ['rapido', 'vegetariano'],
     [['tortillas', 12], ['quesillo', 300], ['loroco', 60], ['frijol', 200]],
     ['Calienta las tortillas en comal.', 'Rellénalas de quesillo y loroco y dóblalas hasta que el queso se derrita.', 'Sirve con frijoles.'], ['cena', 'desayuno', 'refaccion']),

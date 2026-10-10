@@ -230,7 +230,7 @@ export const COMEDOR = [
     ],
   },
   {
-    id: 'arroz-con-leche', nombre: 'Arroz con leche', minutos: 40, porciones: 4, tiempos: ['refaccion', 'desayuno'],
+    id: 'arroz-con-leche', nombre: 'Arroz con leche', minutos: 40, porciones: 4, tiempos: ['refaccion'],
     aparatos: ['estufa'], etiquetas: ['tradicional', 'dulce', 'ninos'], proteina: 'vegetal', popularidad: 4,
     ing: [['arroz', 150], ['leche', 1000], ['azucar', 1], ['canela', 1]],
     pasos: [

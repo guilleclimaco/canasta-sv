@@ -367,7 +367,38 @@ export function enlacesSobras(slots, perfil, manual = {}, sinSobras = []) {
  * @param {string[]} o.sinSobras     comidas donde se quitó a mano la sobra automática
  * @param {Date}   o.hoy             para calcular lo que está por vencer
  */
-export function planificar({
+export function planificar(opciones) {
+  const plan = planificarUnaVez(opciones);
+  const perfil = normalizarPerfil(opciones.perfil);
+  if (plan.error || !plan.presupuesto || plan.total <= plan.presupuesto.max + 0.01 || perfil.estilos.includes('economico') && perfil.repetirParaAhorrar) return plan;
+  // un menú guardado que se recalcula con todo fijo no tiene nada que probar
+  if (plan.slots.every((x) => x.sobraDe || (opciones.fijos || {})[claveSlot(x.dia, x.comida)])) return plan;
+  // No cupo: probar varios arranques en modo ahorro (repetir ingredientes, apuntar al mínimo). Cómo empieza la semana
+  // cambia mucho el resultado; se queda con el que cumple el rango y más gusta, o si ninguno cumple, con el más barato.
+  const intentos = [plan];
+  const ahorro = { ...opciones.perfil, repetirParaAhorrar: true, estilos: [...new Set([...(perfil.estilos || []), 'economico'])] };
+  for (let i = 0; i < 8; i++) {
+    const otro = planificarUnaVez({ ...opciones, perfil: i % 2 ? ahorro : { ...opciones.perfil, repetirParaAhorrar: true }, semilla: (opciones.semilla || 1) + (i + 1) * 7919 });
+    if (otro.error) continue;
+    intentos.push(otro);
+    // con 2 que caben ya se puede elegir el que más gusta; probar más solo si todavía no cabe ninguno
+    if (intentos.filter((x) => x.total <= plan.presupuesto.max + 0.01).length >= 2) break;
+  }
+  const max = plan.presupuesto.max;
+  const caben = intentos.filter((x) => x.total <= max + 0.01);
+  const elegido = caben.length
+    ? caben.sort((a, b) => b.gustoTotal - a.gustoTotal)[0]
+    : intentos.sort((a, b) => a.total - b.total)[0];
+  // el rango que se muestra es el del usuario (no el del modo ahorro)
+  elegido.presupuesto = plan.presupuesto;
+  elegido.dentroPresupuesto = elegido.total <= max + 0.01 && elegido.total >= plan.presupuesto.min - 0.01;
+  elegido.imposible = elegido.total > max + 0.01;
+  if (elegido.imposible) elegido.minimoPosible = elegido.total;
+  else { delete elegido.minimoPosible; if (caben.length && elegido !== plan) elegido.ahorroForzado = true; }
+  return elegido;
+}
+
+function planificarUnaVez({
   perfil: perfilEntrada, precios, despensa = new Map(), semilla = 1, fijos = {}, excluir = [],
   recetas = RECETAS, calificaciones = {}, sobras = {}, sinSobras = [], hoy = new Date(),
 }) {
@@ -414,27 +445,73 @@ export function planificar({
   // compras). Por eso repetir un ingrediente ya comprado (el pollo, la bolsa de arroz) sale casi gratis, y meter
   // uno nuevo cuesta su paquete completo aunque se use poquito.
   const necesidad = new Map(); // ingrediente -> cantidad total de la semana
-  const cacheCaja = new Map();
-  const cajaDe = (id, cant) => {
-    const k = `${id}|${Math.round(cant * 100)}`;
-    if (!cacheCaja.has(k)) cacheCaja.set(k, costoCaja(id, cant, precios, desp));
-    return cacheCaja.get(k);
+  // Para que sea rápido (se calcula cientos de miles de veces): por ingrediente, sus presentaciones se preparan una sola vez.
+  const infoCaja = new Map();
+  const infoDe = (id) => {
+    let f = infoCaja.get(id);
+    if (f === undefined) {
+      const ing = INGREDIENTES[id];
+      if (!ing || ing.basico) f = null;
+      else {
+        const pr = precios[id] || { precioUnit: precioRef(id) };
+        const opts = [pr.producto, ...(pr.alternativas || [])].filter((x) => x?.contenido && x.precio)
+          .map((x) => [x.contenido, x.precio]); // todas: para poquito conviene el paquete chico
+        const hay = disponible(desp, id);
+        f = { opts, unit: pr.precioUnit, und: ing.unidad === 'und', hay: Number.isFinite(hay) ? hay : Infinity };
+      }
+      infoCaja.set(id, f);
+    }
+    return f;
   };
-  const aportes = (r, porciones) => r.ing.filter(([id]) => INGREDIENTES[id] && !INGREDIENTES[id].basico)
-    .map(([id, cant]) => [id, (cant * porciones) / r.porciones]);
+  const cajaDe = (id, cant) => {
+    const f = infoDe(id);
+    if (!f) return 0;
+    const exacta = cant - f.hay;
+    if (exacta <= 0.0001) return 0;
+    const c = f.und ? Math.ceil(exacta - 0.01) : exacta;
+    if (c <= 0) return 0;
+    if (!f.opts.length) return c * f.unit;
+    let m = Infinity;
+    for (const [cont, pr] of f.opts) {
+      const v = Math.max(1, Math.ceil(c / cont - 0.08)) * pr;
+      if (v < m) m = v;
+    }
+    return m;
+  };
+  const cacheAportes = new WeakMap();
+  const aportes = (r, porciones) => {
+    let porR = cacheAportes.get(r);
+    if (!porR) { porR = new Map(); cacheAportes.set(r, porR); }
+    let a = porR.get(porciones);
+    if (!a) {
+      a = r.ing.filter(([id]) => INGREDIENTES[id] && !INGREDIENTES[id].basico).map(([id, cant]) => [id, (cant * porciones) / r.porciones]);
+      porR.set(porciones, a);
+    }
+    return a;
+  };
   const sumar = (r, porciones, signo) => {
     for (const [id, q] of aportes(r, porciones)) necesidad.set(id, Math.max(0, (necesidad.get(id) || 0) + signo * q));
   };
   /** Cuánto sube (o baja) la caja si en una comida se cambia `viejo` por `nuevo` (cualquiera puede ser null) */
+  const tmpIds = [];
+  const tmpQ = [];
   const deltaCaja = (viejo, nuevo, porciones) => {
-    const cambio = new Map();
-    if (viejo) for (const [id, q] of aportes(viejo, porciones)) cambio.set(id, (cambio.get(id) || 0) - q);
-    if (nuevo) for (const [id, q] of aportes(nuevo, porciones)) cambio.set(id, (cambio.get(id) || 0) + q);
+    tmpIds.length = 0;
+    tmpQ.length = 0;
+    const acumular = (lista, signo) => {
+      for (const [id, q] of lista) {
+        const i = tmpIds.indexOf(id);
+        if (i >= 0) tmpQ[i] += signo * q;
+        else { tmpIds.push(id); tmpQ.push(signo * q); }
+      }
+    };
+    if (viejo) acumular(aportes(viejo, porciones), -1);
+    if (nuevo) acumular(aportes(nuevo, porciones), 1);
     let d = 0;
-    for (const [id, q] of cambio) {
-      if (Math.abs(q) < 1e-9) continue;
-      const antes = necesidad.get(id) || 0;
-      d += cajaDe(id, Math.max(0, antes + q)) - cajaDe(id, antes);
+    for (let i = 0; i < tmpIds.length; i++) {
+      if (Math.abs(tmpQ[i]) < 1e-9) continue;
+      const antes = necesidad.get(tmpIds[i]) || 0;
+      d += cajaDe(tmpIds[i], Math.max(0, antes + tmpQ[i])) - cajaDe(tmpIds[i], antes);
     }
     return d;
   };
@@ -446,6 +523,8 @@ export function planificar({
   const objetivo = estilos.has('economico') ? rango.min
     : perfil.repetirParaAhorrar ? rango.min + (rango.max - rango.min) * 0.25 : (rango.min + rango.max) / 2;
   const ahorrar = perfil.repetirParaAhorrar;
+  // cuántas veces puede salir la misma receta en la semana; ahorrando, como en casa: huevos con frijoles 4 mañanas
+  const maxUsos = ahorrar ? { desayuno: 4, refaccion: 4, almuerzo: 2, cena: 3 } : MAX_USOS;
   const peso = (s) => s.porciones * COSTO_SUGERIDO[TIEMPO[s.comida]];
   const pesoTotal = slots.reduce((t, s) => t + peso(s), 0) || 1;
   const metaPorcion = (s) => (objetivo * peso(s)) / pesoTotal / s.porciones;
@@ -484,6 +563,7 @@ export function planificar({
     if (s.dia === 'dom' && t === 'desayuno' && (fam === 'pupusas' || fam === 'tamales' || r.id === 'desayuno-tipico')) c += 1;
     if (s.dia === 'dom' && t === 'almuerzo' && (fam === 'sopa' || /carne-asada|costilla|chumpe|pavo/.test(r.id))) c += 0.9;
     if (!finde && t === 'desayuno' && (fam === 'pupusas' || fam === 'tamales')) c -= 1;
+    if ((t === 'almuerzo' || t === 'cena') && (r.etiquetas || []).includes('dulce')) c -= 1.5; // lo dulce es refacción o desayuno
     return c;
   };
   const diaAnterior = (d) => SEMANA[SEMANA.indexOf(d) - 1];
@@ -524,7 +604,7 @@ export function planificar({
       p += desvio > 0 ? desvio * 2.2 : -desvio * 0.8;
     }
     const u = usos.get(r.id) || 0;
-    p += u >= MAX_USOS[t] ? 50 : u * (t === 'desayuno' || t === 'refaccion' ? 1.2 : 4);
+    p += u >= maxUsos[t] ? 50 : u * (t === 'desayuno' || t === 'refaccion' ? 1.2 : 4);
     if (calificaciones[r.id] === -1) p += 30;
     if (calificaciones[r.id] === 1) p -= 0.8;
     const ayer = diaAnterior(s.dia) && recetaEn(diaAnterior(s.dia), s.comida);
@@ -537,8 +617,8 @@ export function planificar({
       const n = protPrincipal.get(r.proteina) || 0; // misma proteína en la semana: cada vez pesa más
       p += ahorrar ? Math.max(0, n - 2) * 0.4 : n * 0.5 + Math.max(0, n - 1) * 0.9;
       // el mismo plato fuerte con otros acompañamientos (o dos pupusas, dos sopas) en la semana: casi nunca
-      p += (familias.get(familia(r)) || 0) * (r.familia ? 3 : 1.2);
-      if (r.tecnica) p += (tecnicas.get(r.tecnica) || 0) * 0.9; // no cuatro "entomatados" en la semana
+      p += (familias.get(familia(r)) || 0) * (r.familia ? 3 : 1.2) * (ahorrar ? 0.3 : 1);
+      if (r.tecnica) p += (tecnicas.get(r.tecnica) || 0) * 0.9 * (ahorrar ? 0.3 : 1); // no cuatro "entomatados" en la semana
     }
     if (t === 'refaccion') {
       const otra = recetaEn(s.dia, s.comida === 'refaccion_am' ? 'refaccion_pm' : 'refaccion_am');
@@ -547,7 +627,7 @@ export function planificar({
       if (!finDeSemana && r.minutos > 30) p += 1;
     }
     if (t === 'desayuno' && !finDeSemana && r.minutos > 25) p += 0.8;
-    if (t === 'desayuno') p += Math.max(0, (familias.get(familia(r)) || 0) - 1) * 1.5; // "huevos picados" 5 días, no
+    if (t === 'desayuno') p += Math.max(0, (familias.get(familia(r)) || 0) - (ahorrar ? 3 : 1)) * 1.5; // "huevos picados" 5 días, no (ahorrando, sí)
     if ((r.etiquetas || []).includes('finde')) p += finDeSemana ? -0.6 : 0.8; // carne asada, tamales: mejor el fin de semana
     p -= costumbre(s, r);
     // balance: que cada día tenga verdura o fruta
@@ -593,12 +673,31 @@ export function planificar({
     return finalistas.get(k);
   };
   const principal = (k) => ['almuerzo', 'cena'].includes(TIEMPO[porClave.get(k).comida]);
-  // castigo por repetir dentro de la semana, para comparar cambios
+  // castigo por repetir dentro de la semana, para comparar cambios. Se lleva la cuenta (proteína, familia y estilo,
+  // separada para almuerzo/cena y para desayuno/refacción) y se recalcula solo cuando cambia una comida.
+  let cuenta = null;
+  const contar = () => {
+    const c = { true: { prot: new Map(), fam: new Map(), tec: new Map() }, false: { prot: new Map(), fam: new Map(), tec: new Map() } };
+    const mas = (m, x) => x != null && m.set(x, (m.get(x) || 0) + 1);
+    for (const [k2, id] of Object.entries(elegido)) {
+      if (enlaces[k2]) continue;
+      const r2 = porId.get(id);
+      const g = c[principal(k2)];
+      mas(g.prot, r2.proteina); mas(g.fam, familia(r2)); mas(g.tec, r2.tecnica);
+    }
+    cuenta = c;
+  };
+  const otrasCon = (k, mapa, clave, valor) => {
+    if (valor == null) return 0;
+    const propio = porId.get(elegido[k]);
+    const n = cuenta[principal(k)][mapa].get(valor) || 0;
+    return n - (propio && (mapa === 'fam' ? familia(propio) : mapa === 'prot' ? propio.proteina : propio.tecnica) === valor ? 1 : 0);
+  };
   const repetido = (k, r) => {
-    const otras = Object.entries(elegido).filter(([k2]) => k2 !== k && !enlaces[k2] && principal(k2) === principal(k)).map(([, id]) => porId.get(id));
-    if (!principal(k)) return Math.max(0, otras.filter((o) => familia(o) === familia(r)).length - 1) * 1.5;
-    return otras.filter((o) => o.proteina === r.proteina).length * (ahorrar ? 0.15 : 0.5) + otras.filter((o) => familia(o) === familia(r)).length * 2
-      + (r.tecnica ? otras.filter((o) => o.tecnica === r.tecnica).length * 0.6 : 0);
+    const fam = otrasCon(k, 'fam', 'fam', familia(r));
+    if (!principal(k)) return Math.max(0, fam - (ahorrar ? 3 : 1)) * 1.5;
+    return otrasCon(k, 'prot', 'prot', r.proteina) * (ahorrar ? 0.15 : 0.5) + fam * (ahorrar ? 0.6 : 2)
+      + (r.tecnica ? otrasCon(k, 'tec', 'tec', r.tecnica) * (ahorrar ? 0.2 : 0.6) : 0);
   };
   const cambiar = (k, r) => {
     const sl = porClave.get(k);
@@ -617,6 +716,7 @@ export function planificar({
     const arriba = total > rango.max + 0.005;
     const abajo = !arriba && total < rango.min - 0.005 && !estilos.has('economico');
     if (!arriba && !abajo) break;
+    contar();
     const usadas = usosDe();
     let mejor = null;
     for (const sl of slots) {
@@ -625,10 +725,10 @@ export function planificar({
       const actual = porId.get(elegido[k]);
       const gActual = gustoDe.get(actual.id) - repetido(k, actual) + costumbre(sl, actual);
       for (const r of candidatosDe(sl)) {
-        if (r.id === actual.id || (usadas.get(r.id) || 0) >= MAX_USOS[TIEMPO[sl.comida]]) continue;
+        if (r.id === actual.id || (usadas.get(r.id) || 0) >= maxUsos[TIEMPO[sl.comida]]) continue;
         // el mismo plato fuerte con otros acompañamientos no entra dos veces en la semana
-        if (r.familia && familia(r) !== familia(actual) && principal(k)
-          && Object.entries(elegido).some(([k2, id]) => k2 !== k && !enlaces[k2] && principal(k2) && familia(porId.get(id)) === familia(r))) continue;
+        // (si el presupuesto no alcanza, hasta dos veces: huevos con frijoles dos noches es normal)
+        if (r.familia && familia(r) !== familia(actual) && principal(k) && otrasCon(k, 'fam', 'fam', familia(r)) >= (ahorrar ? 3 : arriba ? 2 : 1)) continue;
         const d = deltaCaja(actual, r, cocinar(sl));
         const dG = gustoDe.get(r.id) - repetido(k, r) + costumbre(sl, r) - gActual;
         let valor;
@@ -650,6 +750,7 @@ export function planificar({
   }
   // Ya dentro del rango: mejorar gusto y variedad con cambios que no saquen la caja del rango
   for (let i = 0; i < 25; i++) {
+    contar();
     const usadas = usosDe();
     let mejor = null;
     for (const sl of slots) {
@@ -658,7 +759,7 @@ export function planificar({
       const actual = porId.get(elegido[k]);
       const gActual = gustoDe.get(actual.id) - repetido(k, actual) + costumbre(sl, actual);
       for (const r of candidatosDe(sl)) {
-        if (r.id === actual.id || (usadas.get(r.id) || 0) >= MAX_USOS[TIEMPO[sl.comida]]) continue;
+        if (r.id === actual.id || (usadas.get(r.id) || 0) >= maxUsos[TIEMPO[sl.comida]]) continue;
         const dG = gustoDe.get(r.id) - repetido(k, r) + costumbre(sl, r) - gActual;
         if (dG < 0.6) continue;
         const d = deltaCaja(actual, r, cocinar(sl));
@@ -687,6 +788,7 @@ export function planificar({
   }
   plan.presupuesto = rango;
   plan.porVencer = porVencer(desp, hoy);
+  plan.gustoTotal = plan.slots.reduce((g, x) => g + (gustoDe.get(x.recetaId) || 0), 0);
   return plan;
 }
 

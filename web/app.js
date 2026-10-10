@@ -588,6 +588,10 @@ async function generarMenu({ semilla, fijos = {}, excluir = [], perfil, sinSobra
   const s = semilla ?? ((m.guardado?.semilla || 0) + 1);
   const op = opcionesPlan();
   if (sinSobras) op.sinSobras = sinSobras;
+  // con presupuesto apretado puede tardar unos segundos: se avisa y se deja pintar antes de calcular
+  const v = $('#vista');
+  if (v) v.innerHTML = '<div class="cargando"><div style="text-align:center"><div class="giro" style="margin:0 auto 14px"></div><p class="sub">Armando tu semana…<br>buscando el mejor menú dentro de tu presupuesto</p></div></div>';
+  await new Promise((ok) => requestAnimationFrame(() => setTimeout(ok, 30)));
   const plan = planificar({ perfil: perfil || m.perfil, precios: m.precios, semilla: s, fijos, excluir, ...op });
   if (plan.error) return aviso(plan.error);
   const claves = new Set(Object.keys(fijos));
