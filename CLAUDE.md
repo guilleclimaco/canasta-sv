@@ -19,7 +19,9 @@ de su tía desde cualquier lugar.
 - Selectos (`scraper/selectos.mjs`) está **sin verificar** contra la página real: usa `--descubrir` y ajusta.
 - Pide a Guille solo lo que no puedas hacer (crear cuentas, iniciar sesión en el navegador, pegar llaves).
 
-- Si el proyecto ya estaba instalado y llegó una actualización, sigue `ACTUALIZAR-MENU.md`.
+- Si el proyecto ya estaba instalado y llegó una actualización, sigue `ACTUALIZAR-V4.md` (incluye todo lo anterior).
+- La IA es OPCIONAL y la activa Guille: no despliegues la función `ideas` ni pidas llaves de IA si él no lo pide.
+- Ningún dato personal (correos, nombres) se manda a la IA: solo comida y precios (`web/v4/ia.js → pedidoIdeas`).
 
 ## Comandos útiles
 ```powershell
@@ -28,5 +30,7 @@ node scraper/probar.mjs "arroz omoa"         # precios VTEX sin base de datos
 node scraper/actualizar.mjs --sin-selectos   # cargar precios a Supabase
 node scraper/selectos.mjs --descubrir        # inspeccionar Selectos
 node scraper/agregar-miembro.mjs --ver       # miembros del hogar
+node scraper/mercado.mjs --seco              # sondeo de mercados de la Defensoría (sin guardar)
+node scraper/alertas.mjs --seco              # qué avisos se mandarían hoy
 npx serve web                                # app local; agrega ?demo para datos inventados
 ```

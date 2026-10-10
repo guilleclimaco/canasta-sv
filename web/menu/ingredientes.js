@@ -160,3 +160,87 @@ export const EVITABLES = [
   ['guisquil', 'Güisquil'], ['brocoli', 'Brócoli'], ['lentejas', 'Lentejas'], ['aguacate', 'Aguacate'],
   ['chile_verde', 'Chile verde'], ['repollo', 'Repollo'], ['picante', 'Picante'],
 ];
+
+// ---------------------------------------------------------------------
+// Metadatos: grupo (para el balance), pasillo (modo súper) y días que dura (despensa)
+// ---------------------------------------------------------------------
+const G = {
+  verdura: ['tomate', 'cebolla', 'chile_verde', 'papa', 'zanahoria', 'guisquil', 'yuca', 'elote', 'repollo', 'lechuga',
+    'pepino', 'brocoli', 'vegetales_mixtos', 'cilantro', 'hierbabuena', 'rabano'],
+  fruta: ['limon', 'aguacate', 'platano', 'banano', 'mango', 'manzana', 'naranja', 'papaya'],
+  proteina: ['huevo', 'pechuga', 'pollo_piezas', 'alitas', 'res_posta', 'res_costilla', 'carne_molida', 'chuleta_cerdo',
+    'chorizo', 'salchicha', 'tilapia', 'atun', 'jamon', 'chicharron'],
+  lacteo: ['queso_duro', 'quesillo', 'crema', 'leche', 'yogurt', 'queso_amarillo', 'margarina'],
+  pan: ['tortillas', 'pan_frances', 'pan_hamburguesa', 'pan_molde', 'pan_dulce', 'tostadas'],
+  harina: ['arroz', 'harina_maiz', 'harina_panqueque', 'harina_arroz', 'espagueti', 'coditos', 'fideos', 'cereal', 'galletas',
+    'avena', 'granola', 'pan_molido'],
+  grano: ['frijol', 'lentejas', 'mani', 'palomitas'],
+  otro: ['aceite', 'salsa_tomate', 'mayonesa', 'cafe', 'gelatina'],
+};
+const DURA = {
+  tomate: 7, cebolla: 21, chile_verde: 7, papa: 21, zanahoria: 14, guisquil: 10, yuca: 5, elote: 3, repollo: 10, lechuga: 5,
+  pepino: 7, brocoli: 5, vegetales_mixtos: 90, cilantro: 4, hierbabuena: 4, rabano: 7, limon: 14, aguacate: 4, platano: 5,
+  banano: 5, mango: 5, manzana: 21, naranja: 14, papaya: 4, huevo: 21, pechuga: 3, pollo_piezas: 3, alitas: 3, res_posta: 3,
+  res_costilla: 3, carne_molida: 2, chuleta_cerdo: 3, chorizo: 7, salchicha: 14, tilapia: 2, jamon: 7, chicharron: 3,
+  queso_duro: 30, quesillo: 7, crema: 10, leche: 7, yogurt: 14, queso_amarillo: 21, tortillas: 5, pan_frances: 2,
+  pan_hamburguesa: 5, pan_molde: 6, pan_dulce: 4,
+};
+// ingredientes que no cuentan como "verdura del día" (se usan en poca cantidad)
+const NO_CUENTA_BALANCE = new Set(['limon', 'cilantro', 'hierbabuena', 'cebolla']);
+
+for (const [grupo, ids] of Object.entries(G)) for (const id of ids) if (INGREDIENTES[id]) INGREDIENTES[id].grupo = grupo;
+for (const [id, d] of Object.entries(DURA)) if (INGREDIENTES[id]) INGREDIENTES[id].dura = d;
+
+export const PASILLOS = ['Frutas y verduras', 'Carnes y pescado', 'Lácteos y huevos', 'Panadería y tortillas', 'Abarrotes', 'Limpieza e higiene', 'Otros'];
+
+/** Pasillo del súper para un ingrediente del catálogo */
+export function pasilloDe(id) {
+  const i = INGREDIENTES[id];
+  if (!i?.grupo) return 'Abarrotes';
+  if (id === 'huevo' || i.grupo === 'lacteo') return 'Lácteos y huevos';
+  if (id === 'atun') return 'Abarrotes';
+  return { verdura: 'Frutas y verduras', fruta: 'Frutas y verduras', proteina: 'Carnes y pescado', pan: 'Panadería y tortillas' }[i.grupo] || 'Abarrotes';
+}
+
+/** ¿Este ingrediente cuenta como verdura o fruta para el balance del día? */
+export function esVerduraOFruta(id) {
+  const g = INGREDIENTES[id]?.grupo;
+  return (g === 'verdura' || g === 'fruta') && !NO_CUENTA_BALANCE.has(id);
+}
+
+const LIMPIEZA = ['papel', 'detergente', 'jabon', 'cloro', 'lavaplato', 'desinfectante', 'suavizante', 'shampoo', 'champu',
+  'pasta dental', 'cepillo', 'desodorante', 'toalla', 'servilleta', 'bolsa', 'esponja', 'pañal', 'panal', 'afeitar', 'escoba',
+  'trapeador', 'insecticida', 'aromatizante', 'limpiador'];
+
+/**
+ * Adivina el ingrediente del catálogo a partir del nombre que escribe la persona ("arroz 2 lb" → arroz).
+ * Devuelve el id o null.
+ */
+export function buscarIngrediente(texto) {
+  const n = String(texto || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const palabras = n.split(/[^a-z0-9]+/).filter(Boolean);
+  if (LIMPIEZA.some((w) => n.includes(w))) return null;
+  let mejor = null;
+  let largo = 0;
+  for (const [id, ing] of Object.entries(INGREDIENTES)) {
+    if (ing.basico) continue;
+    const nombre = ing.nombre.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+    const opciones = [nombre, ...(ing.terminos || [])];
+    for (const t of opciones) {
+      const ws = t.split(/[^a-z0-9]+/).filter(Boolean);
+      // "frijoles" sirve para "frijol"; "papa" NO sirve para "papaya" (solo se tolera 1 letra de diferencia)
+      const ok = ws.every((w) => palabras.some((p) => p.startsWith(w) || (w.startsWith(p) && p.length >= 4 && w.length - p.length <= 1)));
+      if (ok && t.length > largo) { mejor = id; largo = t.length; }
+    }
+  }
+  return mejor;
+}
+
+/** Pasillo para cualquier artículo de la lista (con o sin ingrediente del catálogo) */
+export function pasilloDeArticulo(nombre, ingrediente) {
+  if (ingrediente && INGREDIENTES[ingrediente]) return pasilloDe(ingrediente);
+  const n = String(nombre || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  if (LIMPIEZA.some((w) => n.includes(w))) return 'Limpieza e higiene';
+  const id = buscarIngrediente(nombre);
+  return id ? pasilloDe(id) : 'Otros';
+}

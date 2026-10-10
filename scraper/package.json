@@ -7,9 +7,15 @@
     "probar": "node probar.mjs",
     "actualizar": "node actualizar.mjs",
     "selectos:descubrir": "node selectos.mjs --descubrir",
-    "selectos:seco": "node selectos.mjs --seco"
+    "selectos:seco": "node selectos.mjs --seco",
+    "mercado": "node mercado.mjs",
+    "mercado:seco": "node mercado.mjs --seco",
+    "avisos": "node alertas.mjs",
+    "avisos:seco": "node alertas.mjs --seco"
   },
   "dependencies": {
-    "playwright": "1.64.0"
+    "pdfjs-dist": "5.7.284",
+    "playwright": "1.64.0",
+    "web-push": "3.6.7"
   }
 }

@@ -83,8 +83,8 @@ async function crearReal() {
         opciones: (i.productos || []).map((id) => mapa.get(id)).filter(Boolean),
       }));
     },
-    async agregarItem({ nombre, cantidad = 1, categoria = 'Súper', productos = [] }) {
-      const fila = ok(await sb.from('lista').insert({ nombre, cantidad, categoria, productos }).select().single());
+    async agregarItem({ nombre, cantidad = 1, categoria = 'Súper', productos = [], ingrediente = null }) {
+      const fila = ok(await sb.from('lista').insert({ nombre, cantidad, categoria, productos, ingrediente }).select().single());
       // que el robot diario también revise este artículo
       await sb.from('terminos').upsert({ termino: normalizar(nombre) }, { onConflict: 'termino', ignoreDuplicates: true });
       return fila;
@@ -119,7 +119,11 @@ async function crearReal() {
       return ok(
         await sb.from('gastos').select('*').gte('fecha', mes).lt('fecha', finDeMes(mes))
           .order('fecha', { ascending: false }).order('creado', { ascending: false }),
-      ).map((g) => ({ ...g, monto: Number(g.monto) }));
+      ).map((g) => ({ ...g, monto: Number(g.monto), ahorro: Number(g.ahorro || 0) }));
+    },
+    async gastosRango(desde, hasta) {
+      return ok(await sb.from('gastos').select('fecha,monto,ahorro,categoria').gte('fecha', desde).lt('fecha', hasta))
+        .map((g) => ({ ...g, monto: Number(g.monto), ahorro: Number(g.ahorro || 0) }));
     },
     async agregarGasto(g) {
       ok(await sb.from('gastos').insert(g));
@@ -155,6 +159,67 @@ async function crearReal() {
         .on('postgres_changes', { event: '*', schema: 'public', table: 'menus' }, cb)
         .subscribe();
       return () => sb.removeChannel(canal);
+    },
+    // ---- v4: despensa viva ----
+    async despensa() {
+      return ok(await sb.from('despensa').select('*').order('caduca', { nullsFirst: false }).order('nombre'))
+        .map((d) => ({ ...d, cantidad: d.cantidad == null ? null : Number(d.cantidad) }));
+    },
+    async agregarDespensa(fila) {
+      return ok(await sb.from('despensa').insert(fila).select().single());
+    },
+    async actualizarDespensa(id, cambios) {
+      ok(await sb.from('despensa').update({ ...cambios, actualizado: new Date().toISOString() }).eq('id', id));
+    },
+    async borrarDespensa(id) {
+      ok(await sb.from('despensa').delete().eq('id', id));
+    },
+    escucharDespensa(cb) {
+      const canal = sb.channel('despensa-compartida')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'despensa' }, cb).subscribe();
+      return () => sb.removeChannel(canal);
+    },
+    // ---- v4: precios, código de barras, mercado ----
+    async resumenPrecios(ids) {
+      if (!ids.length) return [];
+      return ok(await sb.rpc('resumen_precios', { ids })).map((r) => ({
+        ...r, min60: Number(r.min60), max60: Number(r.max60), prom60: Number(r.prom60),
+      }));
+    },
+    async productosPorEan(codigo) {
+      return ok(await sb.rpc('productos_por_ean', { codigo })).map(num);
+    },
+    async preciosMercado() {
+      const ult = ok(await sb.from('precios_mercado').select('fecha').order('fecha', { ascending: false }).limit(1));
+      if (!ult.length) return [];
+      return ok(await sb.from('precios_mercado').select('*').eq('fecha', ult[0].fecha));
+    },
+    // ---- v4: avisos ----
+    async guardarSuscripcion(sub, prefs) {
+      ok(await sb.from('avisos_suscripciones').upsert({ endpoint: sub.endpoint, datos: sub, prefs }));
+    },
+    async borrarSuscripcion(endpoint) {
+      ok(await sb.from('avisos_suscripciones').delete().eq('endpoint', endpoint));
+    },
+    async suscripcion(endpoint) {
+      return ok(await sb.from('avisos_suscripciones').select('*').eq('endpoint', endpoint).maybeSingle());
+    },
+    // ---- v4: recetas de la familia ----
+    async recetasPropias() {
+      return ok(await sb.from('recetas_propias').select('*').order('creado')).map((r) => ({ ...r.datos, id: r.id, propia: true }));
+    },
+    async guardarRecetaPropia(receta) {
+      const { id, ...datos } = receta;
+      ok(await sb.from('recetas_propias').upsert({ id, datos: { ...datos, id } }));
+    },
+    async borrarRecetaPropia(id) {
+      ok(await sb.from('recetas_propias').delete().eq('id', id));
+    },
+    // ---- v4: ideas con IA (opcional; la función "ideas" debe estar desplegada) ----
+    async ideasIA(pedido) {
+      const { data, error } = await sb.functions.invoke('ideas', { body: pedido });
+      if (error) throw error;
+      return data;
     },
   };
 }
@@ -206,25 +271,52 @@ function crearDemo() {
   const mes = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}-01`;
   const dia = (d) => `${mes.slice(0, 8)}${String(Math.min(d, hoy.getDate())).padStart(2, '0')}`;
   let lista = [
-    { id: 1, nombre: 'Arroz', cantidad: 1, categoria: 'Súper', productos: porNombre('arroz omoa'), comprado: false },
-    { id: 2, nombre: 'Frijol', cantidad: 2, categoria: 'Súper', productos: porNombre('frijol'), comprado: false },
-    { id: 3, nombre: 'Aceite', cantidad: 1, categoria: 'Súper', productos: porNombre('aceite'), comprado: false },
-    { id: 4, nombre: 'Leche', cantidad: 4, categoria: 'Súper', productos: porNombre('leche entera'), comprado: false },
-    { id: 5, nombre: 'Huevos', cantidad: 1, categoria: 'Súper', productos: porNombre('huevos'), comprado: false },
-    { id: 6, nombre: 'Café', cantidad: 1, categoria: 'Súper', productos: porNombre('cafe'), comprado: false },
-    { id: 7, nombre: 'Papel higiénico', cantidad: 1, categoria: 'Limpieza', productos: porNombre('papel'), comprado: false },
-    { id: 8, nombre: 'Tortillas', cantidad: 1, categoria: 'Mercado', productos: [], comprado: false },
+    { id: 1, nombre: 'Arroz', cantidad: 1, categoria: 'Súper', productos: porNombre('arroz omoa'), comprado: false, ingrediente: 'arroz' },
+    { id: 2, nombre: 'Frijol', cantidad: 2, categoria: 'Súper', productos: porNombre('frijol'), comprado: false, ingrediente: 'frijol' },
+    { id: 3, nombre: 'Aceite', cantidad: 1, categoria: 'Súper', productos: porNombre('aceite'), comprado: false, ingrediente: 'aceite' },
+    { id: 4, nombre: 'Leche', cantidad: 4, categoria: 'Súper', productos: porNombre('leche entera'), comprado: false, ingrediente: 'leche' },
+    { id: 5, nombre: 'Huevos', cantidad: 1, categoria: 'Súper', productos: porNombre('huevos'), comprado: false, ingrediente: 'huevo' },
+    { id: 6, nombre: 'Café', cantidad: 1, categoria: 'Súper', productos: porNombre('cafe'), comprado: false, ingrediente: 'cafe' },
+    { id: 7, nombre: 'Papel higiénico', cantidad: 1, categoria: 'Limpieza', productos: porNombre('papel'), comprado: false, ingrediente: null },
+    { id: 8, nombre: 'Tortillas', cantidad: 1, categoria: 'Mercado', productos: [], comprado: false, ingrediente: 'tortillas' },
   ];
+  const isoHoy = hoy.toLocaleDateString('en-CA');
+  const enDias = (n) => { const d = new Date(hoy); d.setDate(d.getDate() + n); return d.toLocaleDateString('en-CA'); };
+  let despensa = [
+    { id: 1, ingrediente: 'arroz', nombre: 'Arroz', cantidad: 900, unidad: 'g', caduca: null },
+    { id: 2, ingrediente: 'pollo_piezas', nombre: 'Pollo en piezas', cantidad: 900, unidad: 'g', caduca: enDias(1) },
+    { id: 3, ingrediente: 'tomate', nombre: 'Tomate', cantidad: 400, unidad: 'g', caduca: enDias(3) },
+    { id: 4, ingrediente: 'huevo', nombre: 'Huevos', cantidad: 6, unidad: 'und', caduca: enDias(15) },
+    { id: 5, ingrediente: null, nombre: 'Jabón de baño', cantidad: null, unidad: null, caduca: null },
+  ];
+  let idDesp = 100;
+  let recetasPropias = [];
+  // historial inventado: lo que está en oferta "bajó" hace 2 días
+  const resumenDemo = (p) => (p.precio < p.precio_lista
+    ? { producto_id: p.id, min60: p.precio, max60: p.precio_lista, prom60: (p.precio + p.precio_lista) / 2, puntos: [[enDias(-40), p.precio_lista], [enDias(-15), p.precio_lista + 0.1], [enDias(-2), p.precio]] }
+    : { producto_id: p.id, min60: p.precio - 0.15, max60: p.precio + 0.1, prom60: p.precio, puntos: [[enDias(-50), p.precio - 0.15], [enDias(-20), p.precio + 0.1], [enDias(-5), p.precio]] });
+  const mercadoDemo = [
+    ['Carnes', 'Pollo, pechuga con hueso y ala', 1, 'Libra', 1.84], ['Carnes', 'Carne de res, posta negra', 1, 'Libra', 4.42],
+    ['Frutas', 'Guineo importado (banano)', 1, 'Unidades', 0.15], ['Frutas', 'Limón Pérsico', 1, 'Unidades', 0.18],
+    ['Granos', 'Arroz Blanco', 1, 'Libra', 0.61], ['Granos', 'Frijol Rojo de Seda', 1, 'Libra', 0.95],
+    ['Huevos', 'Huevo grande', 30, 'Unidades', 4.22], ['Verduras', 'Tomate de cocina', 1, 'Unidades', 0.13],
+    ['Verduras', 'Papa', 1, 'Libra', 0.68], ['Verduras', 'Cebolla, Blanca', 1, 'Unidades', 0.23],
+  ].map(([categoria, producto, cantidad, unidad, promedio]) => ({ fecha: enDias(-5), categoria, producto, cantidad, unidad, promedio }));
   let presupuestos = [
     { mes, categoria: 'Súper', monto: 220 },
     { mes, categoria: 'Mercado', monto: 60 },
     { mes, categoria: 'Limpieza', monto: 40 },
   ];
   let gastos = [
-    { id: 1, fecha: dia(3), tienda: 'maxi', categoria: 'Súper', monto: 48.35, nota: 'Compra de la quincena' },
-    { id: 2, fecha: dia(6), tienda: 'Mercado', categoria: 'Mercado', monto: 12.5, nota: 'Verduras' },
-    { id: 3, fecha: dia(8), tienda: 'selectos', categoria: 'Limpieza', monto: 9.8, nota: '' },
+    { id: 1, fecha: dia(3), tienda: 'maxi', categoria: 'Súper', monto: 48.35, nota: 'Compra de la quincena', ahorro: 4.1 },
+    { id: 2, fecha: dia(6), tienda: 'Mercado', categoria: 'Mercado', monto: 12.5, nota: 'Verduras', ahorro: 2.3 },
+    { id: 3, fecha: dia(8), tienda: 'selectos', categoria: 'Limpieza', monto: 9.8, nota: '', ahorro: 0 },
   ];
+  // meses anteriores (para la gráfica del resumen)
+  [[-1, 268, 15], [-2, 291, 9], [-3, 305, 4], [-4, 279, 11], [-5, 312, 0]].forEach(([dm, monto, ahorro], i) => {
+    const d = new Date(hoy.getFullYear(), hoy.getMonth() + dm, 12);
+    gastos.push({ id: 50 + i, fecha: d.toLocaleDateString('en-CA'), tienda: 'maxi', categoria: 'Súper', monto, nota: '', ahorro });
+  });
   let ajustes = { umbral_segunda_tienda: 3, tiendas_cercanas: tiendas.map((t) => t.id) };
   const menus = {};
   let idItem = 100;
@@ -275,7 +367,8 @@ function crearDemo() {
     async gastos(m) {
       return gastos.filter((g) => g.fecha >= m && g.fecha < finDeMes(m)).sort((a, b) => b.fecha.localeCompare(a.fecha));
     },
-    async agregarGasto(g) { gastos.push({ id: idGasto++, fecha: new Date().toISOString().slice(0, 10), ...g }); },
+    async gastosRango(desde, hasta) { return gastos.filter((g) => g.fecha >= desde && g.fecha < hasta); },
+    async agregarGasto(g) { gastos.push({ id: idGasto++, fecha: isoHoy, ahorro: 0, ...g }); },
     async borrarGasto(id) { gastos = gastos.filter((g) => g.id !== id); },
     escucharLista() { return () => {}; },
     async candidatosIngredientes(terminos) {
@@ -290,5 +383,36 @@ function crearDemo() {
     async menu(semana) { return menus[semana] ?? null; },
     async guardarMenu(semana, datos) { menus[semana] = datos; },
     escucharMenu() { return () => {}; },
+    // ---- v4 ----
+    async despensa() { return despensa.map((d) => ({ ...d })); },
+    async agregarDespensa(f) { const fila = { id: idDesp++, ...f }; despensa.push(fila); return fila; },
+    async actualizarDespensa(id, c) { despensa = despensa.map((d) => (d.id === id ? { ...d, ...c } : d)); },
+    async borrarDespensa(id) { despensa = despensa.filter((d) => d.id !== id); },
+    escucharDespensa() { return () => {}; },
+    async resumenPrecios(ids) { return productos.filter((p) => ids.includes(p.id)).map(resumenDemo); },
+    async productosPorEan(codigo) {
+      const c = String(codigo).replace(/^0+/, '');
+      return productos.filter((p) => p.ean && p.ean.replace(/^0+/, '') === c).sort((a, b) => a.precio - b.precio);
+    },
+    async preciosMercado() { return mercadoDemo; },
+    async guardarSuscripcion() {},
+    async borrarSuscripcion() {},
+    async suscripcion() { return null; },
+    async recetasPropias() { return recetasPropias.map((r) => ({ ...r })); },
+    async guardarRecetaPropia(r) { recetasPropias = [...recetasPropias.filter((x) => x.id !== r.id), { ...r, propia: true }]; },
+    async borrarRecetaPropia(id) { recetasPropias = recetasPropias.filter((x) => x.id !== id); },
+    async ideasIA({ tiempo = 'almuerzo' } = {}) {
+      await espera(800);
+      return {
+        demo: true,
+        recetas: [{
+          id: `ia-${Date.now()}`, nombre: 'Arroz con huevo, tomate y chile (idea de ejemplo)', minutos: 25, porciones: 4,
+          tiempos: [tiempo], aparatos: ['estufa'], etiquetas: ['rapido', 'economico'], proteina: 'huevo',
+          ing: [['arroz', 300], ['huevo', 6], ['tomate', 300], ['chile_verde', 1], ['cebolla', 80], ['aceite', 20]],
+          pasos: ['Cocina el arroz.', 'Sofríe tomate, chile y cebolla.', 'Agrega los huevos revueltos y mezcla con el arroz.'],
+          motivo: 'Usa el tomate que vence pronto y el arroz que ya tienes.',
+        }],
+      };
+    },
   };
 }

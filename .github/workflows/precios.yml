@@ -33,6 +33,29 @@ jobs:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           SELECTOS: ${{ vars.SELECTOS || '1' }}
 
+      - name: Precios de mercados (Defensoría, los lunes o a mano)
+        continue-on-error: true
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "$(date -u +%u)" = "1" ] || [ "${{ vars.MERCADO_DIARIO }}" = "1" ]; then
+            node scraper/mercado.mjs
+          else
+            echo "Hoy no toca (solo lunes)."
+          fi
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+
+      - name: Avisos al celular
+        if: ${{ vars.AVISOS != '0' }}
+        continue-on-error: true
+        run: node scraper/alertas.mjs
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
+
       # GitHub apaga los workflows programados de repos sin actividad en 60 días.
       # El día 1 de cada mes se guarda un cambio mínimo para mantenerlo vivo.
       - name: Latido mensual

@@ -20,7 +20,27 @@ App para el celular (iPhone y Android) que junta la **lista del súper**, el **m
 | **Lista** | Escribes "arroz 2", eliges el producto exacto y ves en qué tienda sale más barato. La lista se comparte en vivo entre los dos celulares. |
 | **Dónde comprar** | Arma el plan más barato: una sola tienda, o dos si te ahorras más de lo que tú definas (por defecto $3). Te dice qué comprar en cada lugar. |
 | **Ofertas** | Productos con precio por debajo de su precio normal o de su máximo de los últimos 60 días. Filtro "De mi lista". |
-| **Gastos** | Presupuesto por categoría (Súper, Mercado, Limpieza…), gastos registrados y cuánto te queda en el mes. |
+| **Gastos** | Presupuesto por categoría (Súper, Mercado, Limpieza…), gastos registrados, cuánto te queda en el mes, **resumen de ahorro** por mes y una **meta** (ej. el carro). El gasto se puede registrar con **foto del ticket**. |
+
+### Novedades de la v4
+
+| Mejora | Qué hace | Dónde |
+|---|---|---|
+| **Despensa viva** | Lo que marcas como comprado entra a "En casa" con cantidad y fecha en que vence. Al marcar una comida como hecha se descuentan sus ingredientes. El menú usa primero lo que vence y no te hace comprar lo que ya tienes. | Lista → En casa |
+| **Cocinar una vez, comer dos veces** | El almuerzo se cocina doble y es la cena, o la cena va de almuerzo al día siguiente (lonchera). Las sobras no cuestan nada extra. | Menú → Preferencias |
+| **Precios del mercado** | El robot lee cada lunes el sondeo de la Defensoría del Consumidor (La Tiendona y otros mercados) y te avisa qué sale más barato en el mercado que en el súper. | Lista y Compras del menú |
+| **Avisos al celular** | Cuando algo de tu lista baja a su precio más bajo, el sábado para armar el menú, al llegar al 90 % del presupuesto y cuando algo en casa está por vencer. | Ajustes |
+| **Resumen de ahorro y meta** | Cuánto ahorraste cada mes vs. la tienda más cara y el avance a una meta. | Gastos |
+| **Modo "en el súper"** | La lista por pasillo, botones grandes, carrito y total que va sumando en la tienda donde estás. Al terminar registra el gasto y pasa todo a "En casa". | Lista → 🛒 |
+| **Escáner de código de barras** | En la tienda escaneas un producto y ves cuánto cuesta en las otras. | Lista → 📷 |
+| **Ticket con foto** | Lee total, fecha y tienda del ticket. En el celular y gratis (o con IA si la activas). | Registrar gasto |
+| **¿Es buen precio?** | Marca si un producto está en su precio más bajo o más alto de 60 días, con gráfica del historial. | Lista |
+| **Compartir por WhatsApp** | La lista ordenada por tienda, con precios. | Lista |
+| **👍 / 👎 recetas** | Lo que no les gustó no vuelve a salir; lo que sí, sale más. | Receta |
+| **Recetas de la familia** | Las agregas escribiendo ingredientes como "pollo 2 lb" y entran al menú y a la cotización. | Menú → 📖 |
+| **Balance** | Avisa si algún día de la semana queda sin verdura ni fruta. | Menú |
+| **Lonchera** | Marca qué comidas van en tupper y solo usa recetas que aguantan. | Menú → Preferencias |
+| **Ideas con IA (opcional)** | Recetas nuevas con lo que tienes, lo que vence y lo que está en oferta. Cuesta centavos al mes. | Menú (si la activas) |
 
 Tiendas:
 
@@ -60,6 +80,8 @@ El mismo producto se empareja entre Walmart, Maxi y Don Juan por **código de ba
 | Supabase | Free | $0 | 500 MB de base de datos, login por correo y Edge Functions. El proyecto se pausa si pasa 7 días sin uso; el robot diario lo mantiene activo. |
 | Dominio | — | $0 | No hace falta. |
 | Compu de la casa | — | luz | Solo si se usa el plan B de Selectos. |
+| Avisos al celular (Web Push) | — | $0 | Los manda el robot diario de GitHub; no hace falta ningún servicio extra. |
+| IA (opcional) | pago por uso | centavos/mes | Solo si activas "Ideas con IA" o la lectura de tickets con IA. Ver [IA opcional](#ia-opcional-centavos-al-mes). |
 
 Verifica los límites actuales en supabase.com/pricing y docs.github.com. Para que la base no crezca, el historial de precios **solo guarda una fila cuando un precio cambia**.
 
@@ -78,13 +100,23 @@ canasta-sv/
 │  ├─ menu/recetas-cenas.js     Cenas
 │  ├─ menu/recetas-refacciones.js Refacciones para los breaks
 │  ├─ menu/ingredientes.js      Ingredientes: cómo buscarlos en tiendas + precio de referencia
-│  ├─ menu/planificador.js      Arma la semana por día y comida: costo, variedad, presupuesto, despensa
+│  ├─ menu/planificador.js      Arma la semana por día y comida: costo, variedad, presupuesto, despensa, sobras
+│  ├─ menu/mercado.js           Lee el sondeo de precios de mercados de la Defensoría
+│  ├─ nucleo.js                 Estado y utilidades compartidas
+│  ├─ v4/despensa.js            Despensa viva ("En casa")
+│  ├─ v4/super.js · escaner.js · compartir.js   Modo súper, código de barras, WhatsApp
+│  ├─ v4/historial.js · mercado-ui.js           ¿Es buen precio? y precios del mercado
+│  ├─ v4/ticket.js · resumen.js                 Ticket con foto, resumen de ahorro y meta
+│  ├─ v4/avisos.js              Avisos al celular (Web Push)
+│  ├─ v4/recetas-ui.js · ia.js  Recetas de la familia e ideas con IA
 │  ├─ config.js                 URL + llave PÚBLICA de Supabase  ← se edita en el paso 5
 │  └─ manifest.webmanifest, sw.js, icons/
 ├─ supabase/
 │  ├─ migrations/…_canasta.sql  Tablas, seguridad (RLS), funciones y vista de ofertas
 │  ├─ migrations/…_menu.sql     Menú semanal compartido + precios por ingrediente
 │  ├─ migrations/…_menu_completo.sql  Términos de ingredientes de desayunos, cenas y refacciones
+│  ├─ migrations/…_v4.sql       Despensa, mercados, avisos, recetas propias, ahorro, historial
+│  ├─ functions/ideas/          Edge Function OPCIONAL de IA (Claude Haiku o Gemini)
 │  ├─ functions/precios/        Edge Function "Buscar ahora" (Deno)
 │  ├─ functions/_shared/vtex.mjs  Lector de precios VTEX (lo comparten la función y el robot)
 │  └─ config.toml
@@ -94,6 +126,8 @@ canasta-sv/
 │  ├─ probar.mjs                Prueba rápida sin base de datos
 │  ├─ agregar-miembro.mjs       Agrega o quita correos del hogar
 │  ├─ tarea-windows.ps1         Plan B: tarea programada de Windows para Selectos
+│  ├─ mercado.mjs               Lee el PDF semanal de la Defensoría (los lunes)
+│  ├─ alertas.mjs               Decide y manda los avisos al celular
 │  └─ .env.example
 ├─ tests/                       node --test tests/*.test.mjs
 └─ .github/workflows/           precios.yml (diario) y pages.yml (publicar app)
@@ -238,6 +272,29 @@ Después mira el log de la corrida de GitHub (`gh run view --log`):
   ```
   La tarea corre a las 6:30 a.m. y, si la compu estaba apagada, en cuanto se encienda.
 
+### Paso 7b · Precios del mercado y avisos al celular (v4)
+
+**Mercado**: el workflow diario corre `scraper/mercado.mjs` los lunes (o a mano con "Run workflow"). Pruébalo antes:
+```powershell
+node scraper/mercado.mjs --seco
+```
+Debe listar productos del sondeo de la Defensoría (arroz, frijol, tomate, pollo…). Si no encuentra el PDF, revisa en defensoria.gob.sv cómo se llama el informe semanal "mercados y tiendas mayoristas" y ajusta `buscarInformes()`. Con un PDF bajado a mano: `node scraper/mercado.mjs --seco --pdf ruta\al\informe.pdf`.
+
+**Avisos**:
+```powershell
+npx web-push generate-vapid-keys
+```
+- La **pública** va en `web/config.js` → `VAPID_PUBLIC_KEY`.
+- En GitHub:
+  ```powershell
+  gh secret set VAPID_PUBLIC_KEY --body "<pública>"
+  gh secret set VAPID_PRIVATE_KEY      # pega la privada
+  gh secret set VAPID_SUBJECT --body "mailto:<correo de Guille>"
+  ```
+- Prueba sin mandar nada: `node scraper/alertas.mjs --seco`.
+- Cada quien activa los avisos en su cel: **Ajustes → Avisos al celular**. En iPhone primero hay que instalar la app en la pantalla de inicio.
+- Para apagarlos para todos: `gh variable set AVISOS --body 0`.
+
 ### Paso 8 · Instalar en los celulares
 
 - **iPhone**: abrir el link en **Safari** → Compartir → **Agregar a inicio**.
@@ -262,6 +319,11 @@ Cada quien entra con su correo, que debe estar en `miembros`, y escribe el códi
 - [ ] Registrar un gasto actualiza la barra del mes.
 - [ ] En el segundo celular la lista cambia sola al marcar algo en el primero (tiempo real).
 - [ ] Selectos: verificado y corriendo en GitHub **o** en la tarea de Windows.
+- [ ] **v4 · En casa**: marcar algo como comprado lo pasa a "En casa"; marcar una comida como hecha descuenta sus ingredientes.
+- [ ] **v4 · Sobras**: con "El almuerzo se cocina doble…" las cenas salen como *sobras* y el costo no se duplica.
+- [ ] **v4 · Mercado**: `precios_mercado` tiene el último sondeo y en la Lista aparece la banda "En el mercado sale más barato" cuando aplica.
+- [ ] **v4 · Avisos**: activados en un cel; `node scraper/alertas.mjs --seco` muestra lo que avisaría.
+- [ ] **v4 · Modo súper, escáner, compartir, ticket con foto, 👍/👎, recetas de la familia y resumen de ahorro** funcionan en el cel.
 - [ ] `scraper/.env` no está en el repo y `web/config.js` no tiene la llave secreta.
 
 ## Mantenimiento
@@ -290,9 +352,36 @@ Cada quien entra con su correo, que debe estar en `miembros`, y escribe el códi
 - Si la receta usa un ingrediente nuevo, agrégalo en `ingredientes.js` y su término en una migración nueva de `terminos`.
 - Corre las pruebas: verifican ingredientes, tiempos y costos de todo el recetario.
 
+## IA opcional (centavos al mes)
+
+Todo funciona sin IA. Si la activas, se agregan dos cosas:
+- **✨ Ideas con IA** en el Menú: propone 3 recetas con lo que hay en casa, lo que vence y lo que está en oferta. Solo puede usar ingredientes del catálogo, para que se puedan cotizar.
+- **Lectura de tickets con IA**: más precisa que la del celular con fotos malas.
+
+La app solo le manda a la IA comida y precios, nunca correos ni nombres. La función tiene un **tope de 30 consultas al día** (`IA_LIMITE_DIARIO`) para que el costo nunca se dispare.
+
+| Proveedor | Modelo por defecto | Precio (por millón de tokens) | Costo estimado al mes* |
+|---|---|---|---|
+| **Anthropic** (por defecto) | `claude-haiku-5-5` | $0.10 entrada / $0.50 salida | **~$0.05–0.10** |
+| Google | `gemini-2.5-flash-lite` | $0.10 / $0.40 (tiene capa gratis con límites) | ~$0.05–0.10, o $0 dentro de la capa gratis |
+| OpenAI (no integrado) | `gpt-5-nano` | $0.05 / $0.40 | similar |
+
+\*Supuesto: ~50 consultas de ideas al mes (~4 000 tokens de entrada + 2 000 de salida cada una) y ~30 tickets. Una consulta de ideas con Haiku 5.5 sale en ~$0.0014; un ticket, en menos de $0.001. Precios de Anthropic según su página oficial (oct 2026); los de Google y OpenAI, de comparadores de terceros. Verifícalos antes de activar.
+
+**Activar** (Claude Code):
+```powershell
+npx supabase functions deploy ideas --project-ref <REF> --no-verify-jwt
+# Opción A: Claude (console.anthropic.com → API keys; se paga por uso con saldo prepagado)
+npx supabase secrets set ANTHROPIC_API_KEY=<llave> --project-ref <REF>
+# Opción B: Gemini (aistudio.google.com → Get API key)
+npx supabase secrets set IA_PROVEEDOR=gemini GEMINI_API_KEY=<llave> --project-ref <REF>
+# Opcional: npx supabase secrets set IA_LIMITE_DIARIO=20 --project-ref <REF>
+```
+Luego, en la app: **Ajustes → Inteligencia artificial → activar**.
+- Pon un límite de gasto en la consola del proveedor como seguro extra.
+- Revisa en sus términos si la capa gratis de Gemini usa los datos para entrenar.
+
 ## Ideas para después (no incluidas)
 
-- **Recetas con IA**: además del recetario, pedirle a un modelo ideas nuevas con lo que hay en oferta. Requiere una Edge Function que llame a la API de Claude con un modelo pequeño; cuesta centavos por menú, pero **ya no es $0**.
 - Postres y bebidas como comidas aparte.
-- Escanear el ticket con la cámara para registrar el gasto automáticamente.
-- Alerta (notificación push) cuando algo de tu lista baja de precio.
+- Leer automáticamente las ofertas de los folletos de las tiendas.

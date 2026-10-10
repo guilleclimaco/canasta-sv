@@ -1,38 +1,30 @@
 :root {
-  --papel: #f5f2ea;
-  --tarjeta: #fffdf8;
-  --tinta: #1b2a22;
-  --tinta-2: #5b6b61;
-  --tinta-3: #8c978f;
-  --linea: #e4dfd2;
-  --verde: #173d2c;
-  --verde-2: #2f6b4f;
-  --verde-suave: #e3eee6;
-  --ahorro: #c2410c;
-  --ahorro-suave: #fdebdc;
-  --peligro: #b42318;
+  /* Paleta Canasta: Classic Crimson #D7263D · Prussian Blue #02182B · Dodger Blue #0197F6 ·
+     Pacific Cyan #448FA3 · White #FFFFFF. El blanco es el fondo; el azul Dodger se usa en rellenos,
+     bordes y cifras grandes (en texto chico no llega al contraste mínimo), el texto va en azul Prusia. */
+  --blanco: #ffffff;
+  --crimson: #d7263d;
+  --prusia: #02182b;
+  --dodger: #0197f6;
+  --cian: #448fa3;
+
+  --papel: var(--blanco);
+  --tarjeta: var(--blanco);
+  --tinta: var(--prusia);
+  --tinta-2: #3d5466;
+  --tinta-3: #5f7383;
+  --linea: #e1e8ee;
+  --verde: var(--prusia);          /* principal fuerte: botones, marca, filtros activos */
+  --verde-2: var(--dodger);        /* acento: casillas, barras, bordes de selección */
+  --verde-suave: #e5f4fe;          /* fondo suave del acento */
+  --cian-suave: #e6f1f4;
+  --ahorro: var(--crimson);        /* ofertas, ahorro y alertas */
+  --ahorro-suave: #fbe8eb;
+  --peligro: var(--crimson);
   --radio: 16px;
-  --sombra: 0 1px 2px rgb(27 42 34 / 6%), 0 4px 16px rgb(27 42 34 / 6%);
+  --sombra: 0 1px 2px rgb(2 24 43 / 6%), 0 4px 16px rgb(2 24 43 / 7%);
   --nav-alto: 64px;
   color-scheme: light;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --papel: #121714;
-    --tarjeta: #1a211d;
-    --tinta: #eef2ee;
-    --tinta-2: #a9b6ad;
-    --tinta-3: #77857c;
-    --linea: #2a332e;
-    --verde: #8fd3ad;
-    --verde-2: #6fbf93;
-    --verde-suave: #1f3329;
-    --ahorro: #fb923c;
-    --ahorro-suave: #3a2416;
-    --peligro: #f87171;
-    --sombra: none;
-    color-scheme: dark;
-  }
 }
 
 * { box-sizing: border-box; }
@@ -101,7 +93,6 @@ h2.titulo { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; c
   height: 50px; padding: 0 18px; border: 0; border-radius: 14px;
   background: var(--verde); color: var(--papel); font-weight: 700;
 }
-@media (prefers-color-scheme: dark) { .btn-primario { color: #0f1612; } }
 .btn-primario:disabled { opacity: .5; }
 .btn-secundario {
   height: 44px; padding: 0 16px; border-radius: 12px; border: 1px solid var(--linea);
@@ -143,8 +134,7 @@ h2.titulo { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; c
 .vacio b { display: block; color: var(--tinta); font-size: 17px; margin-bottom: 4px; }
 
 /* ---------- comparar ---------- */
-.reco { padding: 18px; background: var(--verde); color: var(--papel); border: 0; }
-@media (prefers-color-scheme: dark) { .reco { background: var(--verde-suave); color: var(--tinta); } }
+.reco { padding: 18px; background: var(--tarjeta); color: var(--tinta); border: 1px solid var(--linea); border-top: 4px solid var(--dodger); }
 .reco .eti { font-size: 12.5px; text-transform: uppercase; letter-spacing: .08em; opacity: .8; }
 .reco .donde { font-size: 22px; font-weight: 800; margin: 6px 0 2px; line-height: 1.2; }
 .reco .monto { font-size: 40px; font-weight: 800; letter-spacing: -0.02em; }
@@ -172,7 +162,6 @@ h2.titulo { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; c
   background: var(--tarjeta); font-size: 13.5px; font-weight: 600;
 }
 .filtro[aria-pressed="true"] { background: var(--verde); color: var(--papel); border-color: var(--verde); }
-@media (prefers-color-scheme: dark) { .filtro[aria-pressed="true"] { color: #0f1612; } }
 
 .oferta { display: flex; gap: 12px; align-items: center; padding: 12px 10px 12px 14px; border-bottom: 1px solid var(--linea); }
 .oferta:last-child { border-bottom: 0; }
@@ -314,3 +303,153 @@ h2.titulo { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; c
   border: 1px solid var(--linea); border-radius: 14px; background: var(--papel); }
 .opcion-receta .n { font-weight: 600; }
 .opcion-receta.actual { border-color: var(--verde-2); box-shadow: 0 0 0 2px var(--verde-suave); }
+
+/* =====================================================================
+   v4
+   ===================================================================== */
+.ok { color: var(--verde-2); font-weight: 600; }
+.mal { color: var(--peligro); font-weight: 600; }
+.hoja .error { color: var(--peligro); font-size: 14px; min-height: 18px; }
+
+/* lista: segmentos y acciones */
+.segmento { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; margin: 6px 0 10px;
+  background: var(--linea); border-radius: 14px; }
+.segmento button { height: 38px; border: 0; border-radius: 11px; background: none; font-weight: 650; font-size: 14px; color: var(--tinta-2); }
+.segmento button[aria-selected="true"] { background: var(--tarjeta); color: var(--tinta); box-shadow: var(--sombra); }
+.acciones-lista { display: flex; gap: 8px; margin: -4px 0 12px; overflow-x: auto; scrollbar-width: none; }
+.acciones-lista::-webkit-scrollbar { display: none; }
+.acciones-lista .btn-secundario { flex: none; height: 38px; font-size: 14px; padding: 0 12px; }
+.banda-mercado, .banda-vence, .banda-balance { margin: 0 0 12px; padding: 10px 12px; border-radius: 12px; font-size: 14px; line-height: 1.45; }
+.banda-mercado { background: var(--verde-suave); color: var(--tinta); }
+.banda-mercado .sub { display: block; margin-top: 2px; }
+.banda-vence { background: var(--ahorro-suave); color: var(--tinta); }
+.banda-vence a { color: var(--ahorro); font-weight: 600; }
+.banda-balance { background: var(--tarjeta); border: 1px dashed var(--linea); color: var(--tinta-2); }
+.menu-cab + .banda-vence, .menu-cab + .banda-balance { margin-top: 10px; }
+
+/* ¿es buen precio? */
+.etq-precio { font-size: 11.5px; font-weight: 700; padding: 1px 7px; border-radius: 6px; }
+.etq-precio.bajo { background: var(--verde-suave); color: var(--verde-2); }
+.etq-precio.caro { background: var(--ahorro-suave); color: var(--ahorro); }
+.historial { margin-top: 14px; padding: 12px; border-radius: 12px; background: var(--papel); border: 1px solid var(--linea); color: var(--verde-2); }
+.historial .sub { color: var(--tinta-2); }
+.spark { display: block; margin: 6px 0; }
+
+/* despensa */
+.fila-desp { display: flex; align-items: center; gap: 6px; padding: 10px 8px 10px 14px; border-bottom: 1px solid var(--linea); }
+.fila-desp:last-child { border-bottom: 0; }
+.fila-desp .info { flex: 1; min-width: 0; }
+.fila-desp .n { font-weight: 600; }
+.mini { width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--linea); background: var(--papel); font-size: 18px; }
+.vence.pronto { color: var(--ahorro); font-weight: 600; }
+.vence.mal { color: var(--peligro); }
+
+/* modo súper (hoja de pantalla completa) */
+.hoja.pantalla { top: 0; max-height: none; border-radius: 0; padding-top: calc(env(safe-area-inset-top) + 8px); }
+.hoja.pantalla .asa { display: none; }
+#modo-super { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.super-cab { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.super-cab b { font-size: 20px; }
+.super-lista { flex: 1; overflow-y: auto; margin: 0 -16px; padding: 0 16px 12px; }
+.super-item { display: flex; align-items: center; gap: 14px; width: 100%; min-height: 64px; padding: 10px 12px; margin-bottom: 8px;
+  border: 1px solid var(--linea); border-radius: 14px; background: var(--papel); text-align: left; }
+.super-item .info { display: flex; flex-direction: column; gap: 2px; }
+.super-item .n { font-size: 17px; font-weight: 650; }
+.caja-grande { flex: none; width: 30px; height: 30px; border-radius: 9px; border: 2.5px solid var(--tinta-3); display: grid; place-items: center; }
+.super-item.en { opacity: .6; }
+.super-item.en .n { text-decoration: line-through; }
+.super-item.en .caja-grande { background: var(--verde-2); border-color: var(--verde-2); }
+.super-item.en .caja-grande::after { content: ""; width: 12px; height: 7px; border: solid #fff; border-width: 0 0 3px 3px; transform: translateY(-2px) rotate(-45deg); }
+.super-pie { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 12px; border-top: 1px solid var(--linea); }
+.super-pie .total { font-size: 26px; font-weight: 800; }
+
+/* escáner */
+.camara { position: relative; border-radius: 16px; overflow: hidden; background: #000; aspect-ratio: 4 / 3; }
+.camara video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.mira { position: absolute; left: 12%; right: 12%; top: 38%; bottom: 38%; border: 2.5px solid rgb(255 255 255 / 85%); border-radius: 10px; box-shadow: 0 0 0 999px rgb(0 0 0 / 25%); }
+
+/* menú: sobras, calificar, lonchera, mercado */
+.tag.sobras { background: var(--ahorro-suave); color: var(--ahorro); }
+.dia.sobra .nombre { color: var(--tinta-2); }
+.calificar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 4px 0 8px; font-size: 14px; color: var(--tinta-2); }
+.fila-porciones .lonchera { height: 32px; font-size: 12.5px; margin-left: auto; margin-right: 10px; }
+.chip-mercado { display: inline-block; margin-left: 6px; font-size: 12px; font-weight: 600; color: var(--verde-2); }
+
+/* recetas propias e IA */
+.hoja textarea { width: 100%; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--linea); background: var(--papel); font: inherit; color: var(--tinta); font-weight: 500; resize: vertical; }
+.prev-ing { display: flex; flex-direction: column; gap: 3px; margin: -4px 0 12px; font-size: 13.5px; }
+.prev-ing .si { color: var(--verde-2); }
+.prev-ing .no { color: var(--ahorro); }
+.idea { padding: 14px; margin-bottom: 12px; }
+.idea ul, .idea ol { margin: 8px 0; padding-left: 20px; font-size: 14px; }
+
+/* resumen de ahorro (gráfica de una sola serie: el título la nombra, sin leyenda) */
+.resumen-ahorro { padding: 16px; }
+.resumen-ahorro .grande { font-size: 32px; font-weight: 800; letter-spacing: -0.02em; color: var(--verde-2); }
+.titulo-graf { margin: 14px 0 4px; font-size: 13px; font-weight: 650; color: var(--tinta-2); }
+.barras-ahorro { display: block; overflow: visible; }
+.barras-ahorro .eje { stroke: var(--linea); stroke-width: 1; }
+.barras-ahorro path { fill: color-mix(in srgb, var(--verde-2) 45%, var(--tarjeta)); }
+.barras-ahorro .actual path { fill: var(--verde-2); }
+.barras-ahorro g:hover path { fill: var(--verde); }
+.barras-ahorro .mes { font-size: 11px; fill: var(--tinta-3); }
+.barras-ahorro .valor { font-size: 11.5px; font-weight: 700; fill: var(--tinta); }
+.tabla-datos { margin-top: 6px; font-size: 13px; color: var(--tinta-2); }
+.tabla-datos summary { cursor: pointer; color: var(--verde-2); font-weight: 600; }
+.tabla-datos table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+.tabla-datos td, .tabla-datos th { text-align: right; padding: 3px 4px; border-bottom: 1px solid var(--linea); }
+.tabla-datos td:first-child, .tabla-datos th:first-child { text-align: left; }
+.meta { margin-top: 14px; }
+.meta .fila { display: flex; justify-content: space-between; gap: 8px; font-size: 15px; }
+.meta .barra { height: 10px; margin: 8px 0 4px; background: var(--linea); border-radius: 99px; overflow: hidden; }
+.meta .barra i { display: block; height: 100%; background: var(--verde-2); border-radius: 99px; }
+
+/* gastos y ajustes */
+.ticket-btn { display: grid; place-items: center; width: 100%; margin-bottom: 10px; cursor: pointer; }
+.fila-check { display: flex; gap: 10px; align-items: flex-start; font-weight: 500; color: var(--tinta); padding: 6px 0; }
+.fila-check input { width: 20px; height: 20px; flex: none; margin-top: 1px; }
+.hoja.pantalla #modo-super { flex: 1; }
+
+/* ---------- paleta: texto chico legible (azul Prusia), acentos en Dodger / Cian ---------- */
+a, .btn-texto, .tabla-datos summary, .chip-mercado, .ok, .prev-ing .si { color: var(--prusia); }
+.btn-texto { text-decoration: underline; text-decoration-color: var(--dodger); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+.dia .cuando { color: var(--cian); }
+.dia .cambiar { color: var(--dodger); }
+.tag { background: var(--verde-suave); color: var(--prusia); }
+.etq-precio.bajo { background: var(--cian-suave); color: var(--prusia); }
+.historial { color: var(--prusia); }
+.resumen-ahorro .grande { color: var(--dodger); }
+.reco .monto { color: var(--prusia); }
+.reco .razon, .reco .eti { color: var(--tinta-2); }
+.btn-secundario { border-color: var(--linea); color: var(--prusia); }
+.filtro { border-color: var(--linea); }
+.filtro:hover { border-color: var(--dodger); }
+.cabecera { border-bottom: 1px solid var(--linea); }
+.nav { border-top: 1px solid var(--linea); }
+.nav a[aria-current="page"] { color: var(--dodger); }
+
+/* ---------- presupuesto como rango ---------- */
+.rango-barra { position: relative; height: 6px; margin: 12px 0 2px; border-radius: 99px;
+  background: linear-gradient(90deg, var(--cian-suave), var(--verde-suave)); border: 1px solid var(--linea); }
+.rango-barra i { position: absolute; top: 50%; width: 14px; height: 14px; margin-left: -7px; transform: translateY(-50%);
+  border-radius: 50%; background: var(--dodger); border: 2px solid var(--blanco); box-shadow: 0 0 0 1px var(--dodger); }
+.rango-campos { display: flex; align-items: flex-end; gap: 10px; }
+.rango-campos .campo { flex: 1; margin: 0; }
+.rango-campos .guion { padding-bottom: 14px; color: var(--tinta-3); font-weight: 700; }
+.con-signo { display: flex; align-items: center; gap: 6px; border: 1px solid var(--linea); border-radius: 12px; padding: 0 12px; background: var(--tarjeta); }
+.con-signo:focus-within { border-color: var(--dodger); box-shadow: 0 0 0 3px var(--verde-suave); }
+.con-signo b { color: var(--tinta-3); }
+.con-signo input { border: 0; outline: 0; background: none; height: 46px; width: 100%; min-width: 0; font-size: 17px; }
+
+/* ---------- filtros ---------- */
+.filtros.compactos { margin-top: 8px; }
+.filtros.compactos .filtro { padding: 6px 12px; font-size: 14px; }
+.fila-orden { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; margin: 10px 2px 6px; font-size: 14px; color: var(--tinta-2); }
+.fila-orden select { margin-left: 6px; padding: 6px 10px; border-radius: 10px; border: 1px solid var(--linea); background: var(--tarjeta); color: var(--prusia); font-size: 14px; }
+.check-chico { display: inline-flex; align-items: center; gap: 6px; }
+.check-chico input, .interruptor input { accent-color: var(--dodger); width: 18px; height: 18px; }
+.interruptor { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--linea); font-weight: 500; }
+.estrellas { color: var(--crimson); letter-spacing: 1px; font-size: 12px; margin-right: 2px; }
+/* en las hojas (columna flex) los filtros no se encogen: solo la lista hace scroll */
+.hoja > .filtros, .hoja > .fila-orden, .hoja > form, .hoja > h3, .hoja > .btn-texto { flex: none; }
+.filtros > .filtro { flex: none; }

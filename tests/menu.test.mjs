@@ -251,7 +251,7 @@ test('filtros: sin frituras, solo conocidos, tiempo máximo entre semana y prote
     assert.notEqual(r.proteina, 'cerdo', `${r.id} lleva cerdo`);
     if (!['sab', 'dom'].includes(s.dia)) assert.ok(r.minutos <= 45, `${r.id} tarda ${r.minutos} min entre semana`);
   }
-  assert.ok(recetasPosibles({ ...base, tiempoMax: 30 }, 'almuerzo', 'sab').some((r) => r.minutos > 30), 'el fin de semana no aplica el tiempo máximo');
+  assert.ok(recetasPosibles({ ...base, tiempoMax: 30 }, 'almuerzo', undefined, 'sab').some((r) => r.minutos > 30), 'el fin de semana no aplica el tiempo máximo');
 });
 
 test('perfil viejo con un solo presupuesto: pasa a rango y quita "Económico" que venía por defecto', () => {

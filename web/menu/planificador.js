@@ -1,6 +1,6 @@
 // Arma el menú de la semana con los precios reales de las tiendas.
 // Lógica pura (sin red ni DOM) para poder probarla.
-import { INGREDIENTES, NO_COMIDA, OTRO_ALIMENTO } from './ingredientes.js';
+import { INGREDIENTES, esVerduraOFruta, NO_COMIDA, OTRO_ALIMENTO } from './ingredientes.js';
 import { RECETAS } from './recetas.js';
 
 export const DIAS = [
@@ -129,20 +129,30 @@ export function porcionesDe(perfil) {
 
 export const claveSlot = (dia, comida) => `${dia}:${comida}`;
 
+/** Modos de "cocinar una vez, comer dos veces" */
+export const MODOS_SOBRAS = [
+  ['no', 'No'],
+  ['almuerzo_a_cena', 'Lo que sobra del almuerzo es la cena'],
+  ['cena_a_almuerzo', 'La cena se cocina doble y va de almuerzo al día siguiente (lonchera)'],
+];
+
 /** Acepta perfiles viejos (solo almuerzos con `dias`) y completa lo que falte */
 export function normalizarPerfil(perfil = {}) {
-  const p = { ...PERFIL_INICIAL, ...perfil };
+  const p = { ...PERFIL_INICIAL, sobras: 'no', ...perfil };
   let comidas = perfil.comidas;
   if (!comidas) comidas = { almuerzo: { dias: perfil.dias || [...LV], porciones: null } };
   p.comidas = {};
   for (const [id] of COMIDAS) {
     const c = comidas[id];
-    if (c?.dias?.length) p.comidas[id] = { dias: SEMANA.filter((d) => c.dias.includes(d)), porciones: Number(c.porciones) || null };
+    if (c?.dias?.length) {
+      p.comidas[id] = { dias: SEMANA.filter((d) => c.dias.includes(d)), porciones: Number(c.porciones) || null, lonchera: !!c.lonchera };
+    }
   }
   p.estilos = [...(p.estilos || [])];
   p.proteinas = [...(p.proteinas || [])];
   p.evitar = [...(p.evitar || [])];
   p.aparatos = [...(p.aparatos || [])];
+  if (!MODOS_SOBRAS.some(([m]) => m === p.sobras)) p.sobras = 'no';
   // perfiles de antes (un solo número de presupuesto): ese número es el máximo.
   // Ahí "Económico" venía marcado por defecto y hacía que todo saliera lo más barato posible: se quita.
   if (perfil.presupuesto && !perfil.presupuestoMax) {
@@ -191,9 +201,10 @@ export function rangoPresupuesto(perfilEntrada) {
 /** Qué tan bien le cae una receta al perfil (sin contar el costo) */
 export function gusto(r, perfil) {
   const estilos = new Set(perfil.estilos || []);
+  const etiquetas = r.etiquetas || [];
   let g = r.popularidad ?? 3;
-  g += r.etiquetas.filter((e) => e !== 'dulce' && estilos.has(e)).length * 0.7;
-  if (estilos.has('tradicional') && r.etiquetas.includes('comedor')) g += 0.4;
+  g += etiquetas.filter((e) => e !== 'dulce' && estilos.has(e)).length * 0.7;
+  if (estilos.has('tradicional') && etiquetas.includes('comedor')) g += 0.4;
   if ((perfil.proteinas || []).includes(r.proteina)) g += 0.9;
   return g;
 }
@@ -202,26 +213,66 @@ export function gusto(r, perfil) {
  * Recetas que cumplen los filtros del perfil (aparatos, no me gusta, vegetariano, sin frituras, solo conocidos,
  * tiempo máximo entre semana), opcionalmente para un tiempo de comida y un día.
  */
-export function recetasPosibles(perfilEntrada, tiempo = null, dia = null) {
+export function recetasPosibles(perfilEntrada, tiempo = null, recetas = RECETAS, dia = null) {
   const perfil = normalizarPerfil(perfilEntrada);
   const aparatos = new Set([...(perfil.aparatos || []), 'estufa']);
   const evitar = new Set(perfil.evitar || []);
   const soloVeg = (perfil.estilos || []).includes('vegetariano');
   const entreSemana = dia && !['sab', 'dom'].includes(dia);
-  return RECETAS.filter((r) =>
-    (!tiempo || (r.tiempos || ['almuerzo']).includes(tiempo)) &&
-    r.aparatos.every((a) => aparatos.has(a) || a === 'licuadora') &&
-    !evitar.has(r.proteina) &&
-    !r.ing.some(([id]) => evitar.has(id)) &&
-    !(evitar.has('picante') && r.etiquetas.includes('picante')) &&
-    (!soloVeg || r.etiquetas.includes('vegetariano') || r.proteina === 'vegetal') &&
-    (!perfil.sinFritos || !r.etiquetas.includes('frito')) &&
-    (!perfil.soloConocidos || (r.popularidad ?? 3) >= 4) &&
-    (!entreSemana || !perfil.tiempoMax || r.minutos <= perfil.tiempoMax));
+  return recetas.filter((r) => {
+    const etiquetas = r.etiquetas || [];
+    return (!tiempo || (r.tiempos || ['almuerzo']).includes(tiempo)) &&
+      (r.aparatos || []).every((a) => aparatos.has(a) || a === 'licuadora') &&
+      !evitar.has(r.proteina) &&
+      !r.ing.some(([id]) => evitar.has(id)) &&
+      !(evitar.has('picante') && etiquetas.includes('picante')) &&
+      (!soloVeg || etiquetas.includes('vegetariano') || r.proteina === 'vegetal') &&
+      (!perfil.sinFritos || !etiquetas.includes('frito')) &&
+      (!perfil.soloConocidos || (r.popularidad ?? 3) >= 4) &&
+      (!entreSemana || !perfil.tiempoMax || r.minutos <= perfil.tiempoMax);
+  });
+}
+
+/**
+ * Despensa en un solo formato: Map id -> { cantidad (Infinity = "siempre hay"), caduca }
+ * Acepta: Set de ids (lo que "siempre hay"), Map, o filas de la tabla despensa [{ingrediente, cantidad, caduca}].
+ */
+export function normalizarDespensa(...fuentes) {
+  const m = new Map();
+  const sumar = (id, cantidad, caduca) => {
+    if (!id) return;
+    const prev = m.get(id);
+    const c = cantidad == null ? Infinity : Number(cantidad);
+    const cad = [prev?.caduca, caduca].filter(Boolean).sort()[0] || null;
+    m.set(id, { cantidad: (prev?.cantidad || 0) + c, caduca: cad });
+  };
+  for (const f of fuentes) {
+    if (!f) continue;
+    if (f instanceof Set) f.forEach((id) => sumar(id, null, null));
+    else if (f instanceof Map) f.forEach((v, id) => sumar(id, v?.cantidad ?? null, v?.caduca ?? null));
+    else if (Array.isArray(f)) f.forEach((x) => sumar(x.ingrediente, x.cantidad, x.caduca));
+  }
+  return m;
+}
+
+const disponible = (desp, id) => desp.get(id)?.cantidad ?? 0;
+
+/** Ingredientes de la despensa que vencen en `dias` días o menos */
+export function porVencer(despensa, hoy = new Date(), dias = 3) {
+  const desp = despensa instanceof Map ? despensa : normalizarDespensa(despensa);
+  const limite = new Date(hoy);
+  limite.setDate(limite.getDate() + dias);
+  const lim = limite.toISOString().slice(0, 10);
+  return [...desp].filter(([, v]) => v.caduca && v.caduca <= lim && v.cantidad > 0).map(([id]) => id);
+}
+
+export function tieneVerdura(receta) {
+  return receta.ing.some(([id]) => esVerduraOFruta(id));
 }
 
 /** Costo de una receta escalada, prorrateado (lo que "se come"), y la parte que hay que comprar */
-export function costoReceta(receta, porciones, precios, despensa = new Set()) {
+export function costoReceta(receta, porciones, precios, despensa = new Map()) {
+  const desp = despensa instanceof Map ? despensa : normalizarDespensa(despensa);
   const f = porciones / receta.porciones;
   let total = 0;
   let aComprar = 0;
@@ -230,34 +281,64 @@ export function costoReceta(receta, porciones, precios, despensa = new Set()) {
     const ing = INGREDIENTES[id];
     if (!ing || ing.basico) continue;
     const pr = precios[id] || { precioUnit: precioRef(id), estimado: true };
-    const c = cant * f * pr.precioUnit;
-    total += c;
-    if (!despensa.has(id)) aComprar += c;
+    const necesita = cant * f;
+    total += necesita * pr.precioUnit;
+    aComprar += Math.max(0, necesita - disponible(desp, id)) * pr.precioUnit;
     if (pr.estimado) estimado = true;
   }
   return { total: r2(total), porPorcion: r2(total / porciones), aComprar: r2(aComprar), estimado };
 }
 
+/** Qué comida es sobra de cuál: { "mar:almuerzo": "lun:cena" } */
+export function enlacesSobras(slots, perfil, manual = {}, sinSobras = []) {
+  const hay = new Set(slots.map((s) => claveSlot(s.dia, s.comida)));
+  const map = {};
+  SEMANA.forEach((d, i) => {
+    if (perfil.sobras === 'almuerzo_a_cena' && hay.has(claveSlot(d, 'almuerzo')) && hay.has(claveSlot(d, 'cena'))) {
+      map[claveSlot(d, 'cena')] = claveSlot(d, 'almuerzo');
+    }
+    const sig = SEMANA[i + 1];
+    if (perfil.sobras === 'cena_a_almuerzo' && sig && hay.has(claveSlot(d, 'cena')) && hay.has(claveSlot(sig, 'almuerzo'))) {
+      map[claveSlot(sig, 'almuerzo')] = claveSlot(d, 'cena');
+    }
+  });
+  const orden = new Map(slots.map((s, i) => [claveSlot(s.dia, s.comida), i]));
+  for (const [t, s] of Object.entries(manual || {})) {
+    if (hay.has(t) && hay.has(s) && orden.get(s) < orden.get(t)) map[t] = s;
+  }
+  for (const t of sinSobras || []) delete map[t];
+  for (const [t, s] of Object.entries(map)) if (map[s]) delete map[t]; // sin cadenas de sobras de sobras
+  return map;
+}
+
 /**
  * Arma el menú de la semana: una receta por cada comida elegida de cada día.
  * @param {object} o
- * @param {object} o.perfil      ver PERFIL_INICIAL (también acepta el formato viejo de solo almuerzos)
- * @param {object} o.precios     salida de preciosIngredientes()
- * @param {Set}    o.despensa    ids de ingredientes que ya hay en casa
- * @param {number} o.semilla     cambia la semilla para obtener otro menú
- * @param {object} o.fijos       { "lun:almuerzo": recetaId } comidas que no se deben cambiar
- * @param {string[]} o.excluir   recetas que no se deben usar en las comidas que se recalculan
+ * @param {object} o.perfil          ver PERFIL_INICIAL (también acepta el formato viejo de solo almuerzos)
+ * @param {object} o.precios         salida de preciosIngredientes()
+ * @param {Set|Map|Array} o.despensa lo que hay en casa (ver normalizarDespensa)
+ * @param {number} o.semilla         cambia la semilla para obtener otro menú
+ * @param {object} o.fijos           { "lun:almuerzo": recetaId } comidas que no se deben cambiar
+ * @param {string[]} o.excluir       recetas que no se deben usar en las comidas que se recalculan
+ * @param {Array}  o.recetas         recetario (por defecto RECETAS + las de la familia que pase la app)
+ * @param {object} o.calificaciones  { recetaId: 1 | -1 }
+ * @param {object} o.sobras          enlaces manuales { "mar:almuerzo": "lun:cena" }
+ * @param {string[]} o.sinSobras     comidas donde se quitó a mano la sobra automática
+ * @param {Date}   o.hoy             para calcular lo que está por vencer
  */
-export function planificar({ perfil: perfilEntrada, precios, despensa = new Set(), semilla = 1, fijos = {}, excluir = [] }) {
+export function planificar({
+  perfil: perfilEntrada, precios, despensa = new Map(), semilla = 1, fijos = {}, excluir = [],
+  recetas = RECETAS, calificaciones = {}, sobras = {}, sinSobras = [], hoy = new Date(),
+}) {
   const perfil = normalizarPerfil(perfilEntrada);
+  const desp = despensa instanceof Map ? despensa : normalizarDespensa(despensa);
   const slots = slotsDe(perfil);
   if (!slots.length) return { error: 'Elige al menos una comida y un día.', slots: [], compras: [], total: 0 };
-
   // recetas posibles por comida y día (el tiempo máximo solo aplica entre semana)
   const posibles = new Map();
   const posiblesDe = (s) => {
     const k = `${TIEMPO[s.comida]}|${['sab', 'dom'].includes(s.dia) ? 'finde' : 'semana'}`;
-    if (!posibles.has(k)) posibles.set(k, recetasPosibles(perfil, TIEMPO[s.comida], s.dia));
+    if (!posibles.has(k)) posibles.set(k, recetasPosibles(perfil, TIEMPO[s.comida], recetas, s.dia));
     return posibles.get(k);
   };
   for (const s of slots) {
@@ -266,17 +347,25 @@ export function planificar({ perfil: perfilEntrada, precios, despensa = new Set(
       return { error: `No hay recetas de ${nombre} que cumplan con tus filtros. Quita algo de "No me gusta", sube el tiempo máximo o desmarca "Sin frituras" / "Solo platos conocidos".`, slots: [], compras: [], total: 0 };
     }
   }
-
-  const porId = new Map(RECETAS.map((r) => [r.id, r]));
+  const porId = new Map(recetas.map((r) => [r.id, r]));
   const rnd = mulberry32(semilla);
   const estilos = new Set(perfil.estilos || []);
+  const vence = new Set(porVencer(desp, hoy));
+  const enlaces = enlacesSobras(slots, perfil, sobras, sinSobras); // destino -> origen
+  const destinosDe = {};
+  for (const [t, s] of Object.entries(enlaces)) (destinosDe[s] ||= []).push(t);
+  const porClave = new Map(slots.map((s) => [claveSlot(s.dia, s.comida), s]));
+  // porciones a cocinar = las propias + las de sus sobras
+  const cocinar = (s) => s.porciones + (destinosDe[claveSlot(s.dia, s.comida)] || []).reduce((a, t) => a + porClave.get(t).porciones, 0);
+
   const cacheCosto = new Map();
   const costo = (r, porciones) => {
     const k = `${r.id}|${porciones}`;
-    if (!cacheCosto.has(k)) cacheCosto.set(k, costoReceta(r, porciones, precios, despensa));
+    if (!cacheCosto.has(k)) cacheCosto.set(k, costoReceta(r, porciones, precios, desp));
     return cacheCosto.get(k);
   };
-  const gustoDe = new Map(RECETAS.map((r) => [r.id, gusto(r, perfil)]));
+
+  const gustoDe = new Map(recetas.map((r) => [r.id, gusto(r, perfil)]));
 
   // Presupuesto: se apunta al medio del rango ("Económico" apunta al mínimo). Cada comida recibe
   // una parte según su peso típico (un almuerzo cuesta más que una refacción).
@@ -291,20 +380,44 @@ export function planificar({ perfil: perfilEntrada, precios, despensa = new Set(
   const ingUsados = new Set();
   const protPrincipal = new Map(); // proteína -> veces en almuerzo/cena
   const familias = new Map(); // familia de plato (pupusas, sopa, huevos…) -> veces en la semana
-  const familia = (r) => r.familia || r.id.split('-')[0];
+  const familia = (r) => r.familia || String(r.id).split('-')[0];
+  const verduraDia = new Set();
   const usar = (slot, r) => {
     elegido[claveSlot(slot.dia, slot.comida)] = r.id;
     usos.set(r.id, (usos.get(r.id) || 0) + 1);
-    r.ing.forEach(([id]) => ingUsados.add(id));
     familias.set(familia(r), (familias.get(familia(r)) || 0) + 1);
+    r.ing.forEach(([id]) => { ingUsados.add(id); vence.delete(id); });
     if (['almuerzo', 'cena'].includes(TIEMPO[slot.comida])) protPrincipal.set(r.proteina, (protPrincipal.get(r.proteina) || 0) + 1);
+    if (tieneVerdura(r)) verduraDia.add(slot.dia);
+    for (const t of destinosDe[claveSlot(slot.dia, slot.comida)] || []) {
+      elegido[t] = r.id; // la sobra lleva la misma receta
+      if (tieneVerdura(r)) verduraDia.add(porClave.get(t).dia);
+    }
   };
   const recetaEn = (dia, comida) => porId.get(elegido[claveSlot(dia, comida)]);
   const diaAnterior = (d) => SEMANA[SEMANA.indexOf(d) - 1];
+  const ultimaDelDia = new Map();
+  for (const s of slots) if (!enlaces[claveSlot(s.dia, s.comida)]) ultimaDelDia.set(s.dia, claveSlot(s.dia, s.comida));
 
-  // primero los fijos
+  const candidatasPara = (s) => {
+    let c = posiblesDe(s);
+    if (destinosDe[claveSlot(s.dia, s.comida)]) {
+      const conSobras = c.filter((r) => r.sobras);
+      if (conSobras.length) c = conSobras;
+    }
+    if (perfil.comidas[s.comida]?.lonchera) {
+      const lonch = c.filter((r) => (r.etiquetas || []).includes('lonchera'));
+      if (lonch.length) c = lonch;
+    }
+    const sinExcluir = c.filter((r) => !excluir.includes(r.id));
+    return sinExcluir.length ? sinExcluir : c;
+  };
+
+  // primero los fijos (y sus sobras)
   for (const s of slots) {
-    const id = fijos[claveSlot(s.dia, s.comida)];
+    const k = claveSlot(s.dia, s.comida);
+    if (enlaces[k]) continue;
+    const id = fijos[k];
     if (id && porId.has(id)) usar(s, porId.get(id));
   }
 
@@ -314,19 +427,21 @@ export function planificar({ perfil: perfilEntrada, precios, despensa = new Set(
     const t = TIEMPO[s.comida];
     let p = -gustoDe.get(r.id) * 1.1;
     const meta = metaPorcion(s);
-    const pp = costo(r, s.porciones).aComprar / s.porciones;
+    const pp = costo(r, cocinar(s)).aComprar / cocinar(s);
     if (meta > 0) {
       const desvio = (pp - meta) / meta;
       p += desvio > 0 ? desvio * 2.2 : -desvio * 0.8;
     }
     const u = usos.get(r.id) || 0;
     p += u >= MAX_USOS[t] ? 50 : u * (t === 'desayuno' || t === 'refaccion' ? 1.2 : 4);
+    if (calificaciones[r.id] === -1) p += 30;
+    if (calificaciones[r.id] === 1) p -= 0.8;
     const ayer = diaAnterior(s.dia) && recetaEn(diaAnterior(s.dia), s.comida);
     if (ayer?.id === r.id) p += 3;
     const finDeSemana = s.dia === 'sab' || s.dia === 'dom';
     if (t === 'almuerzo' || t === 'cena') {
       const otra = recetaEn(s.dia, t === 'almuerzo' ? 'cena' : 'almuerzo');
-      if (otra?.proteina === r.proteina) p += 1.5;
+      if (otra?.proteina === r.proteina && otra.id !== r.id) p += 1.5;
       if (ayer?.proteina === r.proteina) p += 1.2;
       const n = protPrincipal.get(r.proteina) || 0; // misma proteína en la semana: cada vez pesa más
       p += n * 0.5 + Math.max(0, n - 1) * 0.9;
@@ -334,12 +449,16 @@ export function planificar({ perfil: perfilEntrada, precios, despensa = new Set(
     }
     if (t === 'refaccion') {
       const otra = recetaEn(s.dia, s.comida === 'refaccion_am' ? 'refaccion_pm' : 'refaccion_am');
-      if (otra && otra.etiquetas.includes('dulce') === r.etiquetas.includes('dulce')) p += 0.6;
+      if (otra && (otra.etiquetas || []).includes('dulce') === (r.etiquetas || []).includes('dulce')) p += 0.6;
       if (otra?.id === r.id) p += 2;
-      if (!finDeSemana && r.minutos > 30) p += 1; // entre semana, refacciones sencillas
+      if (!finDeSemana && r.minutos > 30) p += 1;
     }
-    if (t === 'desayuno' && !finDeSemana && r.minutos > 25) p += 0.8; // entre semana, desayunos rápidos
-    if (r.etiquetas.includes('finde')) p += finDeSemana ? -0.6 : 0.8; // carne asada, tamales: mejor el fin de semana
+    if (t === 'desayuno' && !finDeSemana && r.minutos > 25) p += 0.8;
+    if ((r.etiquetas || []).includes('finde')) p += finDeSemana ? -0.6 : 0.8; // carne asada, tamales: mejor el fin de semana
+    // balance: que cada día tenga verdura o fruta
+    if (!verduraDia.has(s.dia) && tieneVerdura(r)) p -= ultimaDelDia.get(s.dia) === claveSlot(s.dia, s.comida) ? 1.2 : 0.3;
+    // usar primero lo que está por vencer
+    p -= Math.min(1.6, r.ing.filter(([id]) => vence.has(id)).length * 0.8);
     const reusa = r.ing.filter(([id]) => !INGREDIENTES[id]?.basico && ingUsados.has(id)).length;
     p -= Math.min(0.6, reusa * 0.1);
     if (estilos.has('rapido') && r.minutos > 45) p += 1;
@@ -349,25 +468,25 @@ export function planificar({ perfil: perfilEntrada, precios, despensa = new Set(
   };
 
   for (const s of slots) {
-    if (elegido[claveSlot(s.dia, s.comida)]) continue;
-    let candidatas = posiblesDe(s).filter((r) => !excluir.includes(r.id));
-    if (!candidatas.length) candidatas = posiblesDe(s);
+    const k = claveSlot(s.dia, s.comida);
+    if (elegido[k] || enlaces[k]) continue;
     let mejor = null;
     let mejorP = Infinity;
-    for (const r of candidatas) {
+    for (const r of candidatasPara(s)) {
       const p = puntaje(s, r);
       if (p < mejorP) { mejorP = p; mejor = r; }
     }
     usar(s, mejor);
   }
 
-  let plan = armar(slots, elegido, porId, costo, precios, despensa);
+  const armarPlan = () => armar(slots, elegido, enlaces, destinosDe, porId, costo, cocinar, precios, desp);
+  let plan = armarPlan();
 
   // Acomodar al rango: si se pasa del máximo, cambiar la comida donde se ahorra más perdiendo menos gusto;
   // si queda por debajo del mínimo, mejorar la comida donde se gana más gusto sin pasarse del máximo.
   const conteo = () => {
     const m = new Map();
-    Object.values(elegido).forEach((id) => m.set(id, (m.get(id) || 0) + 1));
+    for (const [k, id] of Object.entries(elegido)) if (!enlaces[k]) m.set(id, (m.get(id) || 0) + 1);
     return m;
   };
   for (let i = 0; i < 40; i++) {
@@ -378,16 +497,16 @@ export function planificar({ perfil: perfilEntrada, precios, despensa = new Set(
     let mejorCambio = null;
     for (const x of plan.slots) {
       const k = claveSlot(x.dia, x.comida);
-      if (fijos[k]) continue;
+      if (fijos[k] || x.sobraDe) continue;
       const actual = porId.get(x.recetaId);
       // variedad: cuántas otras comidas principales ya tienen esa proteína o esa familia de plato
       const principal = ['almuerzo', 'cena'].includes(TIEMPO[x.comida]);
-      const otras = principal ? plan.slots.filter((y) => y !== x && ['almuerzo', 'cena'].includes(TIEMPO[y.comida])).map((y) => porId.get(y.recetaId)) : [];
+      const otras = principal ? plan.slots.filter((y) => y !== x && !y.sobraDe && ['almuerzo', 'cena'].includes(TIEMPO[y.comida])).map((y) => porId.get(y.recetaId)) : [];
       const repetido = (r) => otras.filter((o) => o.proteina === r.proteina).length * 0.5 + otras.filter((o) => familia(o) === familia(r)).length * 0.8;
       const cActual = x.costo.aComprar;
-      for (const r of posiblesDe(x)) {
-        if (r.id === actual.id || excluir.includes(r.id) || (usadas.get(r.id) || 0) >= MAX_USOS[TIEMPO[x.comida]]) continue;
-        const dif = costo(r, x.porciones).aComprar - cActual;
+      for (const r of candidatasPara(porClave.get(k))) {
+        if (r.id === actual.id || calificaciones[r.id] === -1 || (usadas.get(r.id) || 0) >= MAX_USOS[TIEMPO[x.comida]]) continue;
+        const dif = costo(r, x.porcionesCocinar).aComprar - cActual;
         const dGusto = gustoDe.get(r.id) - gustoDe.get(actual.id) - (repetido(r) - repetido(actual));
         let valor;
         if (arriba) {
@@ -404,48 +523,66 @@ export function planificar({ perfil: perfilEntrada, precios, despensa = new Set(
     }
     if (!mejorCambio) break;
     elegido[mejorCambio.k] = mejorCambio.r.id;
-    plan = armar(slots, elegido, porId, costo, precios, despensa);
+    for (const t2 of destinosDe[mejorCambio.k] || []) elegido[t2] = mejorCambio.r.id; // sus sobras también
+    plan = armarPlan();
   }
   plan.dentroPresupuesto = plan.total <= rango.max + 0.01 && plan.total >= rango.min - 0.01;
   plan.presupuesto = rango;
+  plan.porVencer = porVencer(desp, hoy);
   return plan;
 }
 
-function armar(slots, elegido, porId, costo, precios, despensa) {
+function armar(slots, elegido, enlaces, destinosDe, porId, costo, cocinar, precios, desp) {
+  const cero = { total: 0, porPorcion: 0, aComprar: 0, estimado: false };
   const lista = slots.map((s) => {
-    const r = porId.get(elegido[claveSlot(s.dia, s.comida)]);
-    return { ...s, recetaId: r.id, costo: costo(r, s.porciones) };
+    const k = claveSlot(s.dia, s.comida);
+    const r = porId.get(elegido[k]);
+    if (enlaces[k]) return { ...s, recetaId: r.id, sobraDe: enlaces[k], porcionesCocinar: 0, costo: cero };
+    const pc = cocinar(s);
+    const c = costo(r, pc);
+    // el costo por porción es de la receta; lo "a comprar" incluye las porciones de las sobras
+    return { ...s, recetaId: r.id, porcionesCocinar: pc, paraSobras: destinosDe[k] || [], costo: c };
   });
-  const compras = calcularCompras(lista.map((x) => ({ receta: porId.get(x.recetaId), porciones: x.porciones })), precios, despensa);
+  const compras = calcularCompras(
+    lista.filter((x) => !x.sobraDe).map((x) => ({ receta: porId.get(x.recetaId), porciones: x.porcionesCocinar })),
+    precios, desp,
+  );
   const porComida = {};
   for (const x of lista) porComida[x.comida] = r2((porComida[x.comida] || 0) + x.costo.aComprar);
+  const dias = [...new Set(lista.map((x) => x.dia))];
+  const diasSinVerdura = dias.filter((d) => !lista.some((x) => x.dia === d && tieneVerdura(porId.get(x.recetaId))));
   return {
     slots: lista,
     compras,
     porComida,
     total: r2(compras.reduce((s, c) => s + c.costo, 0)),
     estimado: compras.some((c) => c.estimado),
+    balance: { dias: dias.length, diasSinVerdura },
   };
 }
 
 /**
- * Lista de compras de la semana: suma cantidades y redondea a paquetes reales cuando hay producto.
+ * Lista de compras de la semana: suma cantidades, descuenta la despensa y redondea a paquetes reales.
  * @param {Array<{receta, porciones}>} items
  */
-export function calcularCompras(items, precios, despensa = new Set()) {
+export function calcularCompras(items, precios, despensa = new Map()) {
+  const desp = despensa instanceof Map ? despensa : normalizarDespensa(despensa);
   const necesita = new Map();
   for (const { receta: r, porciones } of items) {
     const f = porciones / r.porciones;
     for (const [id, cant] of r.ing) {
       const ing = INGREDIENTES[id];
-      if (!ing || ing.basico || despensa.has(id)) continue;
+      if (!ing || ing.basico) continue;
       necesita.set(id, (necesita.get(id) || 0) + cant * f);
     }
   }
   const out = [];
-  for (const [id, cantExacta] of necesita) {
+  for (const [id, total] of necesita) {
+    const cantExacta = total - disponible(desp, id);
+    if (cantExacta <= 0.0001) continue;
     const ing = INGREDIENTES[id];
     const cant = ing.unidad === 'und' ? Math.ceil(cantExacta - 0.01) : cantExacta; // no se compra medio huevo
+    if (cant <= 0) continue;
     const pr = precios[id] || { precioUnit: precioRef(id), estimado: true, producto: null };
     let paquetes = null;
     let costo;
@@ -457,9 +594,9 @@ export function calcularCompras(items, precios, despensa = new Set()) {
       let mejor = null;
       for (const p of opciones) {
         const n = Math.max(1, Math.ceil(cant / p.contenido - 0.08)); // 8 % de tolerancia
-        const total = n * p.precio;
-        if (!mejor || total < mejor.total - 0.005 || (Math.abs(total - mejor.total) < 0.005 && p.precio / p.contenido < mejor.p.precio / mejor.p.contenido)) {
-          mejor = { p, n, total };
+        const tot = n * p.precio;
+        if (!mejor || tot < mejor.total - 0.005 || (Math.abs(tot - mejor.total) < 0.005 && p.precio / p.contenido < mejor.p.precio / mejor.p.contenido)) {
+          mejor = { p, n, total: tot };
         }
       }
       producto = mejor.p;
@@ -471,6 +608,7 @@ export function calcularCompras(items, precios, despensa = new Set()) {
     out.push({
       ingId: id, nombre: ing.nombre, necesita: r2(cant), unidad: ing.unidad, paquetes,
       producto, alternativas: pr.alternativas || [], costo: r2(costo), estimado: !!pr.estimado,
+      enCasa: Number.isFinite(disponible(desp, id)) && disponible(desp, id) > 0 ? r2(disponible(desp, id)) : 0,
     });
   }
   return out.sort((a, b) => b.costo - a.costo);

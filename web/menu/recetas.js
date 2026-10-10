@@ -386,7 +386,27 @@ const FRITOS = ['tilapia-frita', 'tortas-de-papa', 'tortas-de-guisquil', 'chiles
   'platano-con-crema', 'pastelitos', 'yuca-con-chicharron', 'platanitos', 'empanadas-platano', 'enchiladas', 'tostadas-de-frijol'];
 
 export const RECETAS = [...ALMUERZOS, ...COMEDOR, ...DESAYUNOS, ...CENAS, ...REFACCIONES];
+
+// Aguantan ir en lonchera / tupper (se comen frías o se recalientan bien)
+const LONCHERA = new Set([
+  'pollo-guisado', 'arroz-con-pollo', 'carne-guisada', 'frijoles-con-chorizo', 'tortas-de-papa', 'tortas-de-guisquil',
+  'pollo-encebollado', 'espagueti-bolonesa', 'chiles-rellenos', 'salpicon', 'pollo-en-crema', 'arroz-frito',
+  'lentejas-guisadas', 'pechuga-plancha', 'picadillo', 'tortitas-de-atun', 'panes-con-pollo', 'coditos-salchicha',
+  'pollo-horno-papas', 'chuletas-cerdo', 'ensalada-de-pollo', 'tortilla-de-papa', 'pastelitos',
+  'pan-con-frijoles', 'sandwich-jamon-queso', 'yogurt-granola', 'quesadillas-tortilla',
+  'fruta-con-limon', 'banano-refaccion', 'manzana-refaccion', 'naranjas', 'papaya-picada', 'mani', 'palomitas',
+  'quesadilla-salvadorena', 'empanadas-platano', 'gelatina', 'platanitos',
+  // comedor
+  'pollo-entomatado', 'pollo-asado-casamiento', 'pollo-loroco', 'bistec-encebollado', 'bistec-entomatado', 'carne-deshilada',
+  'costilla-en-salsa', 'tortas-de-carne', 'chuleta-asada', 'pasta-con-pollo', 'tamales-pollo', 'arroz-con-leche', 'pan-con-pollo-refa',
+]);
+// No conviene cocinarlas de más para comerlas después (se aguadan o se comen recién hechas)
+const NO_SOBRAS = new Set(['tacos-de-pollo', 'tilapia-frita', 'hamburguesas', 'pupusas', 'chilaquilas', 'enchiladas',
+  'tostadas-de-frijol', 'alitas-freidora', 'huevos-picados', 'huevos-rancheros', 'yuca-con-chicharron', 'pastelitos',
+  'pupusas-revueltas', 'pupusas-loroco', 'pollo-empanizado', 'huevos-entomatados', 'carne-asada', 'yuca-sancochada']);
 for (const r of RECETAS) {
   r.popularidad ??= POPULARIDAD[r.id] ?? 3;
   if (FRITOS.includes(r.id) && !r.etiquetas.includes('frito')) r.etiquetas.push('frito');
+  if (LONCHERA.has(r.id) && !r.etiquetas.includes('lonchera')) r.etiquetas.push('lonchera');
+  r.sobras = !NO_SOBRAS.has(r.id) && r.tiempos.some((t) => t === 'almuerzo' || t === 'cena');
 }

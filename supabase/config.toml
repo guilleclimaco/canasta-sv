@@ -21,3 +21,7 @@ content_path = "./supabase/templates/codigo.html"
 [auth.email.template.confirmation]
 subject = "Tu código para Canasta"
 content_path = "./supabase/templates/codigo.html"
+
+# Función opcional de IA (ideas de recetas y lectura de tickets). Revisa ella misma que sea un miembro.
+[functions.ideas]
+verify_jwt = false
