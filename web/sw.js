@@ -1,9 +1,10 @@
 // Service worker mínimo: guarda la "cáscara" de la app para que abra rápido
 // y sin señal muestre al menos la interfaz. Los datos siempre vienen de la red.
 // Sube VERSION cada vez que cambies archivos de web/ para que los celulares actualicen.
-const VERSION = 'canasta-v2';
+const VERSION = 'canasta-v3.1';
 const CASCARA = ['./', 'index.html', 'estilos.css', 'app.js', 'datos.js', 'optimizador.js', 'config.js', 'manifest.webmanifest', 'icons/icon-192.png',
-  'menu/ingredientes.js', 'menu/recetas.js', 'menu/planificador.js'];
+  'menu/ingredientes.js', 'menu/recetas.js', 'menu/recetas-desayunos.js', 'menu/recetas-cenas.js',
+  'menu/recetas-refacciones.js', 'menu/planificador.js'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(VERSION).then((c) => c.addAll(CASCARA)).then(() => self.skipWaiting()));

@@ -2,7 +2,10 @@ import { crearDatos, normalizar } from './datos.js';
 import { optimizar, precioUnitario, round2 } from './optimizador.js';
 import { INGREDIENTES, DESPENSA_COMUN, EVITABLES, terminosDeIngredientes } from './menu/ingredientes.js';
 import { RECETAS } from './menu/recetas.js';
-import { DIAS, PERFIL_INICIAL, planificar, preciosIngredientes, cantidadTexto, ingredienteEnReceta, porcionesDe } from './menu/planificador.js';
+import {
+  DIAS, COMIDAS, PRESETS, nombreComida, planificar, preciosIngredientes, cantidadTexto, ingredienteEnReceta, porcionesDe,
+  normalizarPerfil, slotsDe, presupuestoSugerido, recetasPosibles, costoReceta, claveSlot,
+} from './menu/planificador.js';
 
 // ---------------------------------------------------------------- utilidades
 const $ = (s, el = document) => el.querySelector(s);
@@ -451,19 +454,40 @@ function hojaElegir(item) {
   buscar(item.nombre);
 }
 
-// ---------------------------------------------------------------- MENÚ (almuerzos de la semana)
+// ---------------------------------------------------------------- MENÚ (todas las comidas de la semana)
 const ESTILOS = [['economico', 'Económico'], ['rapido', 'Rápido'], ['tradicional', 'Típico'], ['saludable', 'Saludable'], ['ninos', 'Para niños'], ['vegetariano', 'Vegetariano']];
 const APARATOS = [['horno', 'Horno'], ['freidora', 'Freidora de aire'], ['licuadora', 'Licuadora']];
+const CORTO = { desayuno: 'Desayuno', refaccion_am: 'Refacción AM', almuerzo: 'Almuerzo', refaccion_pm: 'Refacción PM', cena: 'Cena' };
+const TIEMPO_DE = Object.fromEntries(COMIDAS.map(([id, , t]) => [id, t]));
 const recetaPorId = new Map(RECETAS.map((r) => [r.id, r]));
+const nombreDia = Object.fromEntries(DIAS);
+const LETRA = { lun: 'L', mar: 'M', mie: 'X', jue: 'J', vie: 'V', sab: 'S', dom: 'D' };
 
 function lunesDe(fecha) {
   const d = new Date(fecha);
   const dia = (d.getDay() + 6) % 7; // 0 = lunes
-  // sábado y domingo: se planifica la semana que viene
-  d.setDate(d.getDate() - dia + (dia >= 5 ? 7 : 0));
+  // de viernes a domingo se planifica la semana que viene (es cuando se hace la compra)
+  d.setDate(d.getDate() - dia + (dia >= 4 ? 7 : 0));
   return d.toLocaleDateString('en-CA');
 }
 const fechaCorta = (iso) => new Date(`${iso}T12:00:00`).toLocaleDateString('es-SV', { day: 'numeric', month: 'short' });
+const fechaDeDia = (semana, dia) => {
+  const d = new Date(`${semana}T12:00:00`);
+  d.setDate(d.getDate() + DIAS.findIndex(([x]) => x === dia));
+  return d.getDate();
+};
+
+/** Menús guardados con la versión de solo almuerzos → formato por comidas */
+function migrarGuardado(g) {
+  if (!g) return null;
+  if (g.slots) return g;
+  return {
+    semilla: g.semilla || 1,
+    slots: (g.dias || []).map((d) => ({ dia: d.dia, comida: 'almuerzo', recetaId: d.recetaId })),
+    cocinados: (g.cocinados || []).map((d) => claveSlot(d, 'almuerzo')),
+    descartadas: {},
+  };
+}
 
 async function cargarMenu() {
   if (estado.menuCargado) return;
@@ -471,33 +495,64 @@ async function cargarMenu() {
   const [cands, guardado] = await Promise.all([D.candidatosIngredientes(terminosDeIngredientes()), D.menu(semana)]);
   estado.menu = {
     semana,
-    perfil: { ...PERFIL_INICIAL, ...(estado.ajustes.perfil_menu || {}) },
+    perfil: normalizarPerfil(estado.ajustes.perfil_menu || {}),
     tienePerfil: !!estado.ajustes.perfil_menu,
     despensa: new Set(estado.ajustes.despensa || []),
     precios: preciosIngredientes(cands, tiendasActivas()),
-    guardado,
+    guardado: migrarGuardado(guardado),
+    filtro: estado.menu?.filtro || 'todo',
   };
   estado.menuCargado = true;
 }
 
-/** Recalcula el plan guardado con los precios de hoy (mismas recetas) */
+/** Recalcula el menú guardado con los precios de hoy (mismas recetas, mismas comidas) */
 function planActual() {
   const m = estado.menu;
-  if (!m.guardado?.dias?.length) return null;
-  const fijos = Object.fromEntries(m.guardado.dias.map((d) => [d.dia, d.recetaId]));
-  const perfil = { ...m.perfil, dias: m.guardado.dias.map((d) => d.dia) };
-  return planificar({ perfil, precios: m.precios, despensa: m.despensa, fijos, semilla: m.guardado.semilla || 1 });
+  if (!m.guardado?.slots?.length) return null;
+  const comidas = {};
+  for (const s of m.guardado.slots) {
+    comidas[s.comida] ||= { dias: [], porciones: m.perfil.comidas[s.comida]?.porciones ?? null };
+    comidas[s.comida].dias.push(s.dia);
+  }
+  const fijos = Object.fromEntries(m.guardado.slots.map((s) => [claveSlot(s.dia, s.comida), s.recetaId]));
+  return planificar({ perfil: { ...m.perfil, comidas }, precios: m.precios, despensa: m.despensa, fijos, semilla: m.guardado.semilla || 1 });
 }
 
-async function generarMenu({ semilla, fijos = {}, excluir = [] } = {}) {
+async function generarMenu({ semilla, fijos = {}, excluir = [], perfil } = {}) {
   const m = estado.menu;
   const s = semilla ?? ((m.guardado?.semilla || 0) + 1);
-  const plan = planificar({ perfil: m.perfil, precios: m.precios, despensa: m.despensa, semilla: s, fijos, excluir });
+  const plan = planificar({ perfil: perfil || m.perfil, precios: m.precios, despensa: m.despensa, semilla: s, fijos, excluir });
   if (plan.error) return aviso(plan.error);
-  const cocinados = (m.guardado?.cocinados || []).filter((d) => fijos[d]);
-  m.guardado = { semilla: s, dias: plan.dias.map((d) => ({ dia: d.dia, recetaId: d.recetaId })), cocinados, generado: new Date().toISOString() };
+  const claves = new Set(Object.keys(fijos));
+  m.guardado = {
+    semilla: s,
+    slots: plan.slots.map((x) => ({ dia: x.dia, comida: x.comida, recetaId: x.recetaId })),
+    cocinados: (m.guardado?.cocinados || []).filter((k) => claves.has(k)),
+    descartadas: m.guardado?.descartadas || {},
+    generado: new Date().toISOString(),
+  };
   await D.guardarMenu(m.semana, m.guardado);
   render();
+}
+
+/** Todas las comidas fijas menos una (para cambiar solo esa) */
+function fijosMenos(clave) {
+  return Object.fromEntries(estado.menu.guardado.slots
+    .map((s) => [claveSlot(s.dia, s.comida), s.recetaId])
+    .filter(([k]) => k !== clave));
+}
+
+function cambiarAlAzar(slot) {
+  const m = estado.menu;
+  const k = claveSlot(slot.dia, slot.comida);
+  const excluir = [slot.recetaId, ...(m.guardado.descartadas?.[k] || [])].slice(0, 10);
+  m.guardado.descartadas = { ...(m.guardado.descartadas || {}), [k]: excluir };
+  return generarMenu({ semilla: (m.guardado.semilla || 0) + 1, fijos: fijosMenos(k), excluir });
+}
+
+function elegirReceta(slot, recetaId) {
+  const k = claveSlot(slot.dia, slot.comida);
+  return generarMenu({ semilla: estado.menu.guardado.semilla, fijos: { ...fijosMenos(k), [k]: recetaId } });
 }
 
 async function vistaMenu(v) {
@@ -508,42 +563,59 @@ async function vistaMenu(v) {
   if (!m.tienePerfil) return formularioPerfil(v, { inicial: true });
   const plan = planActual();
   if (!plan) {
-    v.innerHTML = `<div class="vacio tarjeta" style="margin-top:8px"><b>Aún no hay menú esta semana</b>Arma los almuerzos con tus gustos y los precios de hoy.<br><br>
+    v.innerHTML = `<div class="vacio tarjeta" style="margin-top:8px"><b>Aún no hay menú esta semana</b>Arma tus comidas con tus gustos y los precios de hoy.<br><br>
       <button class="btn-primario" id="armar">Armar mi semana</button><br><button class="btn-texto" id="prefs">Preferencias</button></div>`;
     $('#armar').onclick = () => generarMenu({ semilla: Date.now() % 100000 });
     $('#prefs').onclick = () => hojaPerfil();
     return;
   }
+  if (plan.error) {
+    v.innerHTML = `<div class="vacio tarjeta" style="margin-top:8px"><b>No pude armar el menú</b>${esc(plan.error)}<br><br><button class="btn-primario" id="prefs">Preferencias</button></div>`;
+    $('#prefs').onclick = () => hojaPerfil();
+    return;
+  }
   const cocinados = new Set(m.guardado.cocinados || []);
   const pres = Number(m.perfil.presupuesto) || 0;
-  const nombreDia = Object.fromEntries(DIAS);
+  const presentes = COMIDAS.map(([id]) => id).filter((id) => plan.slots.some((s) => s.comida === id));
+  if (m.filtro !== 'todo' && !presentes.includes(m.filtro)) m.filtro = 'todo';
+  const visibles = plan.slots.filter((s) => m.filtro === 'todo' || s.comida === m.filtro);
+  const diasVisibles = DIAS.map(([d]) => d).filter((d) => visibles.some((s) => s.dia === d));
   const enLista = new Set(estado.lista.filter((i) => !i.comprado).map((i) => normalizar(i.nombre)));
   const faltanEnLista = plan.compras.filter((c) => !enLista.has(normalizar(c.nombre)));
+  const comidasTxt = presentes.length === 1 ? `${nombreComida[presentes[0]].toLowerCase()}s` : `${presentes.length} comidas al día`;
 
   v.innerHTML = `
     <section class="tarjeta reco menu-cab" style="margin-top:8px">
-      <div class="eti">Semana del ${esc(fechaCorta(m.semana))} · almuerzos para ${porcionesDe(m.perfil)}</div>
+      <div class="eti">Semana del ${esc(fechaCorta(m.semana))} · ${esc(comidasTxt)}</div>
       <div class="monto precio">${dinero(plan.total)}</div>
       <div class="razon">${pres ? (plan.total <= pres ? `a comprar, dentro de tu presupuesto de ${dinero(pres)}` : `a comprar: ${dinero(plan.total - pres)} arriba de tu presupuesto de ${dinero(pres)}`) : 'a comprar esta semana'}</div>
+      ${presentes.length > 1 ? `<div class="reparto-comidas">${presentes.map((c) => `<span>${esc(CORTO[c])} <b class="precio">${dinero(plan.porComida[c])}</b></span>`).join('')}</div>` : ''}
       ${plan.estimado ? '<span class="ahorro">Algunos precios son estimados</span>' : ''}
     </section>
 
-    <h2 class="titulo">Almuerzos</h2>
-    <div class="tarjeta">${plan.dias.map((d) => {
-      const r = recetaPorId.get(d.recetaId);
-      return `
-      <div class="dia ${cocinados.has(d.dia) ? 'hecho' : ''}" data-dia="${d.dia}">
-        <button class="check" aria-label="Marcar como cocinado"></button>
-        <button class="info">
-          <div class="cuando">${esc(nombreDia[d.dia])}</div>
-          <div class="nombre">${esc(r.nombre)}</div>
-          <div class="sub"><span class="precio">${dinero(d.costo.porPorcion)}/porción</span><span>· ${r.minutos} min</span>${r.etiquetas.includes('rapido') ? '<span class="tag">rápido</span>' : ''}${r.etiquetas.includes('tradicional') ? '<span class="tag">típico</span>' : ''}</div>
-        </button>
-        <button class="mas cambiar" aria-label="Cambiar receta" title="Cambiar">↻</button>
-      </div>`;
-    }).join('')}</div>
+    ${presentes.length > 1 ? `<div class="filtros" style="margin-top:10px">
+      <button class="filtro" data-f="todo" aria-pressed="${m.filtro === 'todo'}">Todo</button>
+      ${presentes.map((c) => `<button class="filtro" data-f="${c}" aria-pressed="${m.filtro === c}">${esc(CORTO[c])}</button>`).join('')}
+    </div>` : ''}
 
-    <div style="display:flex;gap:10px;margin-top:12px">
+    ${diasVisibles.map((d) => `
+      <h2 class="titulo">${esc(nombreDia[d])} ${fechaDeDia(m.semana, d)}</h2>
+      <div class="tarjeta">${visibles.filter((s) => s.dia === d).map((s) => {
+        const r = recetaPorId.get(s.recetaId);
+        const k = claveSlot(s.dia, s.comida);
+        return `
+        <div class="dia ${cocinados.has(k) ? 'hecho' : ''}" data-k="${k}">
+          <button class="check" aria-label="Marcar como hecho"></button>
+          <button class="info">
+            <div class="cuando">${esc(nombreComida[s.comida])}${s.porciones !== porcionesDe(m.perfil) ? ` · ${s.porciones} porc.` : ''}</div>
+            <div class="nombre">${esc(r.nombre)}</div>
+            <div class="sub"><span class="precio">${dinero(s.costo.porPorcion)}/porción</span><span>· ${r.minutos} min</span>${r.etiquetas.includes('tradicional') ? '<span class="tag">típico</span>' : ''}</div>
+          </button>
+          <button class="mas cambiar" aria-label="Cambiar por otra al azar" title="Otra al azar">↻</button>
+        </div>`;
+      }).join('')}</div>`).join('')}
+
+    <div style="display:flex;gap:10px;margin-top:14px">
       <button class="btn-secundario" style="flex:1" id="otro">Generar otro menú</button>
       <button class="btn-secundario" style="flex:1" id="prefs">Preferencias</button>
     </div>
@@ -564,30 +636,23 @@ async function vistaMenu(v) {
     <button class="btn-primario" id="a-lista" style="width:100%;margin-top:12px" ${faltanEnLista.length ? '' : 'disabled'}>
       ${faltanEnLista.length ? `Agregar ${faltanEnLista.length} a mi lista` : 'Todo ya está en tu lista ✓'}</button>`;
 
+  $$('.filtro', v).forEach((b) => (b.onclick = () => { m.filtro = b.dataset.f; render(); }));
   $$('.dia', v).forEach((el) => {
-    const dia = el.dataset.dia;
-    const d = plan.dias.find((x) => x.dia === dia);
-    $('.info', el).onclick = () => hojaReceta(recetaPorId.get(d.recetaId), d, plan);
+    const k = el.dataset.k;
+    const slot = plan.slots.find((s) => claveSlot(s.dia, s.comida) === k);
+    $('.info', el).onclick = () => hojaReceta(slot);
     $('.check', el).onclick = async () => {
       const set = new Set(m.guardado.cocinados || []);
-      set.has(dia) ? set.delete(dia) : set.add(dia);
+      set.has(k) ? set.delete(k) : set.add(k);
       m.guardado.cocinados = [...set];
       await D.guardarMenu(m.semana, m.guardado);
       render();
     };
-    $('.cambiar', el).onclick = () => cambiarDia(dia, d.recetaId);
+    $('.cambiar', el).onclick = () => cambiarAlAzar(slot);
   });
   $('#otro').onclick = () => generarMenu({ semilla: (m.guardado.semilla || 0) + 1 });
   $('#prefs').onclick = () => hojaPerfil();
   $('#a-lista').onclick = (ev) => agregarComprasALista(faltanEnLista, ev.currentTarget);
-}
-
-function cambiarDia(dia, recetaActual) {
-  const m = estado.menu;
-  const fijos = Object.fromEntries(m.guardado.dias.filter((d) => d.dia !== dia).map((d) => [d.dia, d.recetaId]));
-  const excluir = [recetaActual, ...(m.guardado.descartadas?.[dia] || [])];
-  m.guardado.descartadas = { ...(m.guardado.descartadas || {}), [dia]: excluir.slice(-8) };
-  return generarMenu({ semilla: (m.guardado.semilla || 0) + 1, fijos, excluir });
 }
 
 /** Productos equivalentes del ingrediente en cada tienda, para que "Dónde comprar" compare */
@@ -619,24 +684,57 @@ async function agregarComprasALista(compras, btn) {
   }
 }
 
-function hojaReceta(r, d, plan) {
+function hojaReceta(slot) {
   const m = estado.menu;
-  const porciones = plan.porciones;
+  const r = recetaPorId.get(slot.recetaId);
   const h = abrirHoja(`
     <h3>${esc(r.nombre)}</h3>
-    <p class="sub" style="margin:-6px 0 10px">${porciones} porciones · ${r.minutos} min · ${dinero(d.costo.porPorcion)} por porción${d.costo.estimado ? ' (estimado)' : ''}</p>
+    <p class="sub" style="margin:-6px 0 10px">${esc(nombreComida[slot.comida])} del ${esc(nombreDia[slot.dia].toLowerCase())} · ${slot.porciones} porciones · ${r.minutos} min · ${dinero(slot.costo.porPorcion)} por porción${slot.costo.estimado ? ' (estimado)' : ''}</p>
     <div class="cuerpo receta">
       <h4>Ingredientes</h4>
-      <ul>${r.ing.map(([id, cant]) => `<li class="${m.despensa.has(id) || INGREDIENTES[id]?.basico ? 'tengo' : ''}">${esc(ingredienteEnReceta(id, cant, r, porciones))}</li>`).join('')}</ul>
+      <ul>${r.ing.map(([id, cant]) => `<li class="${m.despensa.has(id) || INGREDIENTES[id]?.basico ? 'tengo' : ''}">${esc(ingredienteEnReceta(id, cant, r, slot.porciones))}</li>`).join('')}</ul>
       <h4>Preparación</h4>
       <ol>${r.pasos.map((p) => `<li>${esc(p)}</li>`).join('')}</ol>
     </div>
     <div class="pie">
-      <button class="btn-secundario" id="cambiar">Cambiar receta</button>
+      <button class="btn-secundario" id="elegir">Elegir otra</button>
       <button class="btn-primario" id="cerrar">Listo</button>
     </div>`);
   $('#cerrar', h).onclick = cerrarHoja;
-  $('#cambiar', h).onclick = () => { cerrarHoja(); cambiarDia(d.dia, r.id); };
+  $('#elegir', h).onclick = () => hojaElegirReceta(slot);
+}
+
+/** Recetario: todas las recetas posibles para esa comida, de la más barata a la más cara */
+function hojaElegirReceta(slot) {
+  const m = estado.menu;
+  const opciones = recetasPosibles(m.perfil, TIEMPO_DE[slot.comida])
+    .map((r) => ({ r, c: costoReceta(r, slot.porciones, m.precios, m.despensa) }))
+    .sort((a, b) => a.c.porPorcion - b.c.porPorcion);
+  const h = abrirHoja(`
+    <h3>${esc(nombreComida[slot.comida])} del ${esc(nombreDia[slot.dia].toLowerCase())}</h3>
+    <form class="agregar" id="f-rec" style="margin-top:0" onsubmit="return false">
+      <input name="q" placeholder="Buscar receta… (ej. pollo, huevo)" aria-label="Buscar receta">
+    </form>
+    <div class="cuerpo" id="recetas"></div>`);
+  const pintar = (q = '') => {
+    const ws = normalizar(q).split(' ').filter(Boolean);
+    const lista = opciones.filter(({ r }) => {
+      // por inicio de palabra: "pollo" no debe encontrar "repollo"
+      const palabras = normalizar(`${r.nombre} ${r.ing.map(([i]) => INGREDIENTES[i]?.nombre).join(' ')}`).split(/[^a-z0-9]+/);
+      return ws.every((w) => palabras.some((x) => x.startsWith(w)));
+    });
+    $('#recetas', h).innerHTML = lista.map(({ r, c }) => `
+      <button class="opcion-receta ${r.id === slot.recetaId ? 'actual' : ''}" data-id="${r.id}">
+        <span class="n">${esc(r.nombre)}${r.id === slot.recetaId ? ' <span class="tag">actual</span>' : ''}</span>
+        <span class="sub"><span class="precio">${dinero(c.porPorcion)}/porción</span><span>· ${r.minutos} min</span>${r.etiquetas.filter((e) => ['rapido', 'tradicional', 'saludable', 'ninos'].includes(e)).map((e) => `<span class="tag">${{ rapido: 'rápido', tradicional: 'típico', saludable: 'saludable', ninos: 'niños' }[e]}</span>`).join('')}</span>
+      </button>`).join('') || '<div class="vacio">Ninguna receta coincide.</div>';
+    $$('.opcion-receta', h).forEach((b) => (b.onclick = async () => {
+      cerrarHoja();
+      if (b.dataset.id !== slot.recetaId) await elegirReceta(slot, b.dataset.id);
+    }));
+  };
+  $('#f-rec input', h).oninput = (ev) => pintar(ev.target.value);
+  pintar();
 }
 
 function hojaPerfil() {
@@ -644,28 +742,41 @@ function hojaPerfil() {
   formularioPerfil($('#perfil-cuerpo', h), { inicial: false });
 }
 
-/** Configuración estilo NeatEat: quiénes comen, días, presupuesto, gustos, aparatos y despensa */
+/** Configuración estilo NeatEat: quiénes comen, qué comidas y qué días, presupuesto, gustos, aparatos y despensa */
 function formularioPerfil(cont, { inicial }) {
   const m = estado.menu;
-  const p = { ...m.perfil, dias: [...m.perfil.dias], estilos: [...m.perfil.estilos], evitar: [...m.perfil.evitar], aparatos: [...m.perfil.aparatos] };
+  const p = normalizarPerfil(m.perfil);
   const despensa = new Set(m.despensa);
   const chips = (grupo, opciones, sel) => `<div class="chips" data-grupo="${grupo}">${opciones.map(([id, txt]) =>
     `<button type="button" class="filtro" data-id="${esc(id)}" aria-pressed="${sel.includes(id)}">${esc(txt)}</button>`).join('')}</div>`;
-  const sugerido = Math.round(porcionesDe(p) * p.dias.length * 1.6);
+  const tiene = (c, d) => !!p.comidas[c]?.dias.includes(d);
+
   cont.innerHTML = `
-    ${inicial ? `<section class="intro"><h2>Arma tus almuerzos de la semana</h2>
-      <p>Te propongo qué cocinar con lo más barato de esta semana y te paso los ingredientes a la lista.</p></section>` : ''}
+    ${inicial ? `<section class="intro"><h2>Arma el menú de tu semana</h2>
+      <p>Elige qué comidas quieres planear: desayunos, refacciones, almuerzos o cenas. Te propongo qué cocinar con lo más barato de la semana y te paso los ingredientes a la lista.</p></section>` : ''}
     <div class="${inicial ? 'tarjeta ' : ''}paso">
-      <h4>¿Cuántos comen?</h4>
+      <h4>¿Cuántos comen en casa?</h4>
       <div class="dos">
         <div class="campo">Adultos<div class="stepper"><button type="button" data-paso="adultos:-1">−</button><b id="v-adultos">${p.adultos}</b><button type="button" data-paso="adultos:1">+</button></div></div>
         <div class="campo">Niños (media porción)<div class="stepper"><button type="button" data-paso="ninos:-1">−</button><b id="v-ninos">${p.ninos}</b><button type="button" data-paso="ninos:1">+</button></div></div>
       </div>
-      <h4>¿Qué días cocinas almuerzo?</h4>
-      ${chips('dias', DIAS.map(([id, n]) => [id, n.slice(0, 3)]), p.dias)}
-      <h4>Presupuesto semanal para almuerzos</h4>
-      <label class="campo"><input id="presupuesto" type="number" inputmode="decimal" min="0" step="1" value="${p.presupuesto || ''}" placeholder="${sugerido}">
-        <span class="unit" id="sugerido">Un menú económico para ${porcionesDe(p)} sale aprox. $${sugerido} por ${p.dias.length} días.</span></label>
+
+      <h4>¿Qué comidas planeamos?</h4>
+      <div class="chips" id="presets">${PRESETS.map(([id, txt]) => `<button type="button" class="filtro" data-preset="${id}">${esc(txt)}</button>`).join('')}</div>
+      <p class="unit" style="margin:10px 0 6px">O marca día por día. Toca el nombre de la comida para marcar o quitar toda la fila.</p>
+      <div class="grid-comidas" id="grid">
+        <span></span>${DIAS.map(([d]) => `<button type="button" class="col" data-col="${d}">${LETRA[d]}</button>`).join('')}
+        ${COMIDAS.map(([c]) => `
+          <button type="button" class="fila-nombre" data-fila="${c}">${esc(CORTO[c])}</button>
+          ${DIAS.map(([d]) => `<button type="button" class="celda" data-c="${c}" data-d="${d}" aria-pressed="${tiene(c, d)}" aria-label="${esc(CORTO[c])} ${esc(nombreDia[d])}"></button>`).join('')}`).join('')}
+      </div>
+
+      <div id="personas-comida"></div>
+
+      <h4>Presupuesto semanal para el menú</h4>
+      <label class="campo"><input id="presupuesto" type="number" inputmode="decimal" min="0" step="1" value="${p.presupuesto || ''}">
+        <span class="unit" id="sugerido"></span></label>
+
       <h4>¿Cómo te gusta?</h4>
       ${chips('estilos', ESTILOS, p.estilos)}
       <h4>Además de la estufa, ¿qué tienes?</h4>
@@ -678,29 +789,78 @@ function formularioPerfil(cont, { inicial }) {
     </div>
     <button class="btn-primario" id="guardar-perfil" style="width:100%;margin-top:14px">${inicial ? 'Armar mi semana' : 'Guardar y rehacer menú'}</button>`;
 
-  const actualizarSugerido = () => {
-    const s = Math.round(porcionesDe(p) * p.dias.length * 1.6);
-    $('#sugerido', cont).textContent = `Un menú económico para ${porcionesDe(p)} sale aprox. $${s} por ${p.dias.length} días.`;
-    $('#presupuesto', cont).placeholder = s;
+  const setDia = (c, d, on) => {
+    p.comidas[c] ||= { dias: [], porciones: null };
+    const dias = new Set(p.comidas[c].dias);
+    on ? dias.add(d) : dias.delete(d);
+    p.comidas[c].dias = DIAS.map(([x]) => x).filter((x) => dias.has(x));
+    if (!p.comidas[c].dias.length) delete p.comidas[c];
   };
+  const refrescar = () => {
+    $$('.celda', cont).forEach((b) => b.setAttribute('aria-pressed', String(tiene(b.dataset.c, b.dataset.d))));
+    $$('.fila-nombre', cont).forEach((b) => b.classList.toggle('activa', !!p.comidas[b.dataset.fila]));
+    const base = porcionesDe(p);
+    const activas = COMIDAS.filter(([c]) => p.comidas[c]);
+    $('#personas-comida', cont).innerHTML = activas.length ? `
+      <h4>Porciones por comida</h4>
+      <p class="unit" style="margin:-4px 0 8px">Por si no todos comen en casa (ej. el almuerzo solo para 1 que lo lleva al trabajo).</p>
+      ${activas.map(([c, n]) => `<div class="fila-porciones"><span>${esc(n)}</span>
+        <div class="stepper"><button type="button" data-porc="${c}:-1">−</button><b>${p.comidas[c].porciones || base}</b><button type="button" data-porc="${c}:1">+</button></div></div>`).join('')}` : '';
+    $$('[data-porc]', cont).forEach((b) => (b.onclick = () => {
+      const [c, delta] = b.dataset.porc.split(':');
+      const actual = p.comidas[c].porciones || base;
+      const nuevo = Math.max(0.5, Math.min(20, actual + Number(delta)));
+      p.comidas[c].porciones = nuevo === base ? null : nuevo;
+      refrescar();
+    }));
+    const slots = slotsDe(p);
+    const sug = presupuestoSugerido(p);
+    $('#sugerido', cont).textContent = slots.length
+      ? `${slots.length} comidas en la semana. Un menú económico sale aprox. $${sug}.`
+      : 'Marca al menos una comida.';
+    $('#presupuesto', cont).placeholder = sug || '';
+  };
+
   $$('[data-paso]', cont).forEach((b) => (b.onclick = () => {
     const [k, delta] = b.dataset.paso.split(':');
     p[k] = Math.max(k === 'adultos' ? 1 : 0, Math.min(12, p[k] + Number(delta)));
     $(`#v-${k}`, cont).textContent = p[k];
-    actualizarSugerido();
+    refrescar();
   }));
-  $$('.chips', cont).forEach((g) => $$('.filtro', g).forEach((b) => (b.onclick = () => {
+  $$('[data-preset]', cont).forEach((b) => (b.onclick = () => {
+    const [, , comidas] = PRESETS.find(([id]) => id === b.dataset.preset);
+    const porc = Object.fromEntries(Object.entries(p.comidas).map(([c, v]) => [c, v.porciones]));
+    p.comidas = Object.fromEntries(Object.entries(comidas).map(([c, dias]) => [c, { dias: [...dias], porciones: porc[c] ?? null }]));
+    refrescar();
+  }));
+  $$('.celda', cont).forEach((b) => (b.onclick = () => { setDia(b.dataset.c, b.dataset.d, !tiene(b.dataset.c, b.dataset.d)); refrescar(); }));
+  $$('.fila-nombre', cont).forEach((b) => (b.onclick = () => {
+    const c = b.dataset.fila;
+    const todos = DIAS.every(([d]) => tiene(c, d));
+    DIAS.forEach(([d]) => setDia(c, d, !todos));
+    refrescar();
+  }));
+  $$('.col', cont).forEach((b) => (b.onclick = () => {
+    const d = b.dataset.col;
+    const activas = COMIDAS.filter(([c]) => p.comidas[c]).map(([c]) => c);
+    const filas = activas.length ? activas : ['almuerzo'];
+    const todos = filas.every((c) => tiene(c, d));
+    filas.forEach((c) => setDia(c, d, !todos));
+    refrescar();
+  }));
+  $$('.chips[data-grupo]', cont).forEach((g) => $$('.filtro', g).forEach((b) => (b.onclick = () => {
     const grupo = g.dataset.grupo;
     const id = b.dataset.id;
     const on = b.getAttribute('aria-pressed') !== 'true';
     b.setAttribute('aria-pressed', String(on));
     if (grupo === 'despensa') on ? despensa.add(id) : despensa.delete(id);
     else p[grupo] = on ? [...p[grupo], id] : p[grupo].filter((x) => x !== id);
-    if (grupo === 'dias') actualizarSugerido();
   })));
+  refrescar();
+
   $('#guardar-perfil', cont).onclick = async (ev) => {
-    if (!p.dias.length) return aviso('Elige al menos un día.');
-    p.presupuesto = Number($('#presupuesto', cont).value) || Math.round(porcionesDe(p) * p.dias.length * 1.6);
+    if (!slotsDe(p).length) return aviso('Marca al menos una comida en algún día.');
+    p.presupuesto = Number($('#presupuesto', cont).value) || presupuestoSugerido(p);
     ev.currentTarget.disabled = true;
     try {
       await Promise.all([D.guardarAjuste('perfil_menu', p), D.guardarAjuste('despensa', [...despensa])]);

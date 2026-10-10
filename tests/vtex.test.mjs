@@ -41,6 +41,7 @@ test('contenido: nombres reales de productos a granel (oct 2026)', () => {
   assert.deepEqual(parsearContenido('Pechuga Pollo Indio congelada, de 10 libras aproximadamente - Precio indicado por libra'), lb);
   assert.deepEqual(parsearContenido('Filete De Tilapia Sin Piel De 5 A 7 onz - Precio Indicado Por Libra (454 g)'), lb);
   assert.deepEqual(parsearContenido('Filete De Tilapia Sin Piel -Precio Por Lb'), lb);
+  assert.deepEqual(parsearContenido('Papaya Tainung Hortifruti - Peso Aproximado 2 a 6 libras, precio Indicado Por Libra (454 g)'), lb);
   assert.deepEqual(parsearContenido('Papa Americana Red 5 Libras - 15 a 20 Unidades Aproximadamente, precio Indicado Por Libra (454 g)'), { contenido: 2267.95, unidad: 'g' });
   assert.deepEqual(parsearContenido('Papa Súper en Red 3 Libras - 6 a 9 Unidades Aproximadamente (1 Lb= 454 g)'), { contenido: 1360.78, unidad: 'g' });
   assert.deepEqual(parsearContenido('Huevo Mediano Catalana 15U 735 g A 825 g'), { contenido: 15, unidad: 'und' });

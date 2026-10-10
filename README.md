@@ -1,6 +1,6 @@
 # 🧺 Canasta SV
 
-App para el celular (iPhone y Android) que junta la **lista del súper**, el **menú de almuerzos de la semana**, el **presupuesto del mes** y un **comparador de precios** de supermercados de El Salvador. Te arma qué cocinar con lo más barato de la semana, te pasa los ingredientes a la lista Te dice si conviene comprar todo en un solo lugar o dividir la compra entre dos tiendas, y solo te manda a la segunda si el ahorro vale la vuelta.
+App para el celular (iPhone y Android) que junta la **lista del súper**, el **menú de la semana (desayunos, refacciones, almuerzos y cenas)**, el **presupuesto del mes** y un **comparador de precios** de supermercados de El Salvador. Te arma qué cocinar con lo más barato de la semana, te pasa los ingredientes a la lista Te dice si conviene comprar todo en un solo lugar o dividir la compra entre dos tiendas, y solo te manda a la segunda si el ahorro vale la vuelta.
 
 **Costo mensual: $0.** Todo corre en planes gratuitos.
 
@@ -16,7 +16,7 @@ App para el celular (iPhone y Android) que junta la **lista del súper**, el **m
 
 | Pantalla | Para qué |
 |---|---|
-| **Menú** | Estilo NeatEat: le dices cuántos comen, qué días cocinas, tu presupuesto, gustos, aparatos y lo que ya tienes en casa, y arma los almuerzos de la semana con 28 recetas salvadoreñas y cotidianas, usando los precios reales de hoy. Puedes cambiar cualquier día, ver la receta con cantidades y pasos, y mandar los ingredientes a la lista con un toque. Sin IA de pago: $0. |
+| **Menú** | Estilo NeatEat. Eliges qué comidas planear (desayuno, refacción de la mañana, almuerzo, refacción de la tarde, cena) en una cuadrícula de día × comida, con plantillas rápidas ("Solo almuerzos", "Desayuno + almuerzo", "Todo el día"…), y cuántas porciones lleva cada comida. Con tu presupuesto, gustos, aparatos y lo que ya tienes en casa, arma la semana con un recetario de 68 platos salvadoreños y cotidianos, usando los precios reales de hoy. Puedes cambiar cualquier comida al azar o elegirla del recetario, ver la receta con cantidades y pasos, y mandar los ingredientes a la lista con un toque. Sin IA de pago: $0. |
 | **Lista** | Escribes "arroz 2", eliges el producto exacto y ves en qué tienda sale más barato. La lista se comparte en vivo entre los dos celulares. |
 | **Dónde comprar** | Arma el plan más barato: una sola tienda, o dos si te ahorras más de lo que tú definas (por defecto $3). Te dice qué comprar en cada lugar. |
 | **Ofertas** | Productos con precio por debajo de su precio normal o de su máximo de los últimos 60 días. Filtro "De mi lista". |
@@ -73,14 +73,18 @@ canasta-sv/
 │  ├─ index.html, estilos.css, app.js
 │  ├─ datos.js                  Supabase real + modo demo
 │  ├─ optimizador.js            Decide dónde comprar (lógica pura, con pruebas)
-│  ├─ menu/recetas.js           28 almuerzos (cantidades para 4, pasos, aparatos, etiquetas)
+│  ├─ menu/recetas.js           Almuerzos + junta todo el recetario (RECETAS)
+│  ├─ menu/recetas-desayunos.js Desayunos
+│  ├─ menu/recetas-cenas.js     Cenas
+│  ├─ menu/recetas-refacciones.js Refacciones para los breaks
 │  ├─ menu/ingredientes.js      Ingredientes: cómo buscarlos en tiendas + precio de referencia
-│  ├─ menu/planificador.js      Arma la semana: costo, variedad, presupuesto, despensa
+│  ├─ menu/planificador.js      Arma la semana por día y comida: costo, variedad, presupuesto, despensa
 │  ├─ config.js                 URL + llave PÚBLICA de Supabase  ← se edita en el paso 5
 │  └─ manifest.webmanifest, sw.js, icons/
 ├─ supabase/
 │  ├─ migrations/…_canasta.sql  Tablas, seguridad (RLS), funciones y vista de ofertas
 │  ├─ migrations/…_menu.sql     Menú semanal compartido + precios por ingrediente
+│  ├─ migrations/…_menu_completo.sql  Términos de ingredientes de desayunos, cenas y refacciones
 │  ├─ functions/precios/        Edge Function "Buscar ahora" (Deno)
 │  ├─ functions/_shared/vtex.mjs  Lector de precios VTEX (lo comparten la función y el robot)
 │  └─ config.toml
@@ -253,7 +257,7 @@ Cada quien entra con su correo, que debe estar en `miembros`, y escribe el códi
 - [ ] Agregar "leche" → elegir producto → aparece el precio en varias tiendas.
 - [ ] "Buscar en tiendas" dentro del selector trae productos nuevos (Edge Function).
 - [ ] "Dónde comprar" muestra una recomendación.
-- [ ] **Menú**: llenar preferencias → "Armar mi semana" → aparecen los almuerzos con costo; ↻ cambia un día; "Agregar a mi lista" pasa los ingredientes.
+- [ ] **Menú**: elegir una plantilla (ej. "Todo el día") y ajustar la cuadrícula → "Armar mi semana" → aparece cada día con sus comidas y costos; los filtros por comida funcionan; ↻ cambia una comida; "Elegir otra" abre el recetario; "Agregar a mi lista" pasa los ingredientes.
 - [ ] Después de la corrida diaria, en Menú desaparece "Algunos precios son estimados" para la mayoría de ingredientes (o se reduce).
 - [ ] Registrar un gasto actualiza la barra del mes.
 - [ ] En el segundo celular la lista cambia sola al marcar algo en el primero (tiempo real).
@@ -270,16 +274,24 @@ Cada quien entra con su correo, que debe estar en `miembros`, y escribe el códi
 
 ## Cómo arma el menú (sin IA, $0)
 
-1. Para cada ingrediente del recetario busca en la base los productos reales (`candidatos_ingredientes`), descarta los que no son el ingrediente (ej. "sopa sabor pollo") y usa el más barato por gramo, ml o unidad. Si todavía no hay precio real, usa un precio de referencia y lo marca como *estimado*.
-2. Elige una receta por día: la que menos cuesta comprar, con bonos por tu estilo, por reaprovechar ingredientes que ya se compran esa semana y por ingredientes en oferta. Penaliza repetir receta o la misma proteína seguida, y le da un toque de azar para que "Generar otro menú" cambie.
-3. Si se pasa del presupuesto, cambia los días más caros por recetas más baratas.
-4. La lista de compras suma lo de toda la semana, quita lo que ya tienes y redondea a paquetes reales, eligiendo la presentación que sale más barata en total.
+1. **Qué planear**: cada combinación día × comida marcada en la cuadrícula es un espacio a llenar, con sus porciones (por defecto las del hogar; los niños cuentan media).
+2. **Precios**: para cada ingrediente busca los productos reales (`candidatos_ingredientes`), descarta los que no son el ingrediente (ej. "sopa sabor pollo", "semidescremada" para crema) y usa el más barato por gramo, ml o unidad. Si todavía no hay precio real, usa uno de referencia y lo marca como *estimado*.
+3. **Elegir recetas**: para cada espacio busca solo recetas de ese tipo de comida (`tiempos`) y escoge la que menos cuesta comprar, con estas reglas:
+   - **Repeticiones**: un almuerzo o cena no se repite en la semana; un desayuno, máximo 2 veces; una refacción, máximo 3.
+   - **Variedad**: el almuerzo y la cena del mismo día no llevan la misma proteína, ni se repite la proteína del día anterior; las dos refacciones del día alternan dulce y salado.
+   - **Entre semana**: desayunos y refacciones rápidos.
+   - **Bonos**: por tu estilo, por reaprovechar ingredientes que ya se compran esa semana y por ofertas.
+   - **Azar**: un toque para que "Generar otro menú" cambie.
+4. **Presupuesto**: si se pasa, cambia las comidas más caras por recetas más baratas del mismo tipo.
+5. **Compras**: suma lo de toda la semana, quita lo que ya tienes y redondea a paquetes reales, eligiendo la presentación más barata en total.
 
-Para agregar recetas, edita `web/menu/recetas.js`. Si usas un ingrediente nuevo, agrégalo en `ingredientes.js` y su término en una migración nueva de `terminos`. Corre las pruebas: verifican que cada receta use ingredientes existentes.
+**Agregar recetas**: ponlas en el archivo de su comida (`recetas-desayunos.js`, `recetas-cenas.js`, `recetas-refacciones.js` o `recetas.js`), con `tiempos` indicando en qué comidas pueden salir.
+- Si la receta usa un ingrediente nuevo, agrégalo en `ingredientes.js` y su término en una migración nueva de `terminos`.
+- Corre las pruebas: verifican ingredientes, tiempos y costos de todo el recetario.
 
 ## Ideas para después (no incluidas)
 
 - **Recetas con IA**: además del recetario, pedirle a un modelo ideas nuevas con lo que hay en oferta. Requiere una Edge Function que llame a la API de Claude con un modelo pequeño; cuesta centavos por menú, pero **ya no es $0**.
-- Desayunos y cenas, además de almuerzos.
+- Postres y bebidas como comidas aparte.
 - Escanear el ticket con la cámara para registrar el gasto automáticamente.
 - Alerta (notificación push) cuando algo de tu lista baja de precio.

@@ -136,7 +136,12 @@ async function crearReal() {
     },
     // ---- menú semanal ----
     async candidatosIngredientes(terminos) {
-      return ok(await sb.rpc('candidatos_ingredientes', { terminos, por_termino: 15 })).map(num);
+      // Supabase devuelve como máximo 1000 filas por consulta; con ~127 términos × hasta 15 por
+      // unidad de medida se pasaba y los últimos ingredientes quedaban sin precio. Se pide por lotes.
+      const lotes = [];
+      for (let i = 0; i < terminos.length; i += 15) lotes.push(terminos.slice(i, i + 15));
+      const res = await Promise.all(lotes.map((t) => sb.rpc('candidatos_ingredientes', { terminos: t, por_termino: 15 })));
+      return res.flatMap((r) => ok(r)).map(num);
     },
     async menu(semana) {
       return ok(await sb.from('menus').select('*').eq('semana', semana).maybeSingle())?.datos ?? null;

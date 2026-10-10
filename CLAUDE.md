@@ -1,6 +1,6 @@
 # CLAUDE.md — Canasta SV
 
-Objetivo: dejar funcionando la app Canasta (lista del súper + menú semanal de almuerzos + presupuesto +
+Objetivo: dejar funcionando la app Canasta (lista del súper + menú semanal (desayunos, refacciones, almuerzos y cenas) + presupuesto +
 comparador de precios de supermercados de El Salvador) con **costo $0**, accesible desde el iPhone de Guille y el Android
 de su tía desde cualquier lugar.
 

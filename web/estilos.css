@@ -296,3 +296,21 @@ h2.titulo { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; c
 .receta li { margin-bottom: 6px; }
 .receta li.tengo { color: var(--tinta-3); }
 .receta li.tengo::after { content: " · ya tienes"; font-size: 12px; }
+
+/* ---------- menú por comidas ---------- */
+.reparto-comidas { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 10px; font-size: 13px; opacity: .92; }
+.grid-comidas { display: grid; grid-template-columns: minmax(0, 1fr) repeat(7, 32px); gap: 6px 5px; align-items: center; }
+.grid-comidas .col { height: 26px; border: 0; background: none; font-size: 12.5px; font-weight: 700; color: var(--tinta-2); padding: 0; }
+.grid-comidas .fila-nombre { border: 0; background: none; text-align: left; font-size: 13px; font-weight: 600; color: var(--tinta-2); padding: 0; line-height: 1.15; }
+.grid-comidas .fila-nombre.activa { color: var(--tinta); }
+.celda { width: 32px; height: 32px; border-radius: 10px; border: 1.5px solid var(--linea); background: var(--papel); padding: 0; display: grid; place-items: center; }
+.celda[aria-pressed="true"] { background: var(--verde-2); border-color: var(--verde-2); }
+.celda[aria-pressed="true"]::after { content: ""; width: 10px; height: 6px; border: solid #fff; border-width: 0 0 2.5px 2.5px; transform: translateY(-1px) rotate(-45deg); }
+.fila-porciones { display: flex; align-items: center; justify-content: space-between; padding: 6px 0; font-size: 15px; }
+.fila-porciones .stepper { gap: 10px; }
+.fila-porciones .stepper button { width: 38px; height: 38px; }
+.fila-porciones .stepper b { font-size: 18px; min-width: 2.5ch; }
+.opcion-receta { display: flex; flex-direction: column; gap: 2px; width: 100%; text-align: left; padding: 12px; margin-bottom: 8px;
+  border: 1px solid var(--linea); border-radius: 14px; background: var(--papel); }
+.opcion-receta .n { font-weight: 600; }
+.opcion-receta.actual { border-color: var(--verde-2); box-shadow: 0 0 0 2px var(--verde-suave); }

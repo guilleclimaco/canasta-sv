@@ -1,10 +1,17 @@
-// Recetario de almuerzos (cantidades para 4 porciones; el planificador escala).
+// Recetario (cantidades para 4 porciones salvo que diga otra cosa; el planificador escala).
+// Este archivo tiene los ALMUERZOS; desayunos, cenas y refacciones están en recetas-*.js
+// y todo se junta abajo en RECETAS.
+// tiempos: desayuno | refaccion | almuerzo | cena  (en qué comidas puede aparecer)
 // ing: [idIngrediente, cantidad en la unidad del ingrediente (g, ml o und)]
 // aparatos: estufa | horno | freidora (de aire) | licuadora
-// etiquetas: rapido (≤30 min) | economico | tradicional | saludable | ninos | vegetariano
+// etiquetas: rapido (≤30 min) | economico | tradicional | saludable | ninos | vegetariano | dulce
 // proteina: pollo | res | cerdo | pescado | huevo | embutido | vegetal
 
-export const RECETAS = [
+import { DESAYUNOS } from './recetas-desayunos.js';
+import { CENAS } from './recetas-cenas.js';
+import { REFACCIONES } from './recetas-refacciones.js';
+
+const ALMUERZOS = [
   {
     id: 'pollo-guisado', nombre: 'Pollo guisado con arroz', minutos: 60, porciones: 4,
     aparatos: ['estufa'], etiquetas: ['tradicional'], proteina: 'pollo',
@@ -335,3 +342,24 @@ export const RECETAS = [
     ],
   },
 ];
+
+// Almuerzos que también sirven de cena (más livianos o típicos de noche) o de desayuno
+const TAMBIEN = {
+  'huevos-picados': ['desayuno', 'cena'],
+  'tortas-de-papa': ['cena'],
+  'tortas-de-guisquil': ['cena'],
+  'arroz-frito': ['cena'],
+  'tacos-de-pollo': ['cena'],
+  'sopa-de-frijoles': ['cena'],
+  'pupusas': ['cena', 'desayuno'],
+  'panes-con-pollo': ['cena'],
+  'coditos-salchicha': ['cena'],
+  'hamburguesas': ['cena'],
+  'pechuga-plancha': ['cena'],
+  'tortitas-de-atun': ['cena'],
+  'espagueti-bolonesa': ['cena'],
+  'frijoles-con-chorizo': ['cena', 'desayuno'],
+};
+for (const r of ALMUERZOS) r.tiempos = ['almuerzo', ...(TAMBIEN[r.id] || [])];
+
+export const RECETAS = [...ALMUERZOS, ...DESAYUNOS, ...CENAS, ...REFACCIONES];

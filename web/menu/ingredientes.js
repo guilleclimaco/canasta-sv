@@ -69,7 +69,40 @@ export const INGREDIENTES = {
   pan_frances: { nombre: 'Pan francés', terminos: ['pan frances'], unidad: 'und', ref: 0.15, excluir: [] },
   pan_hamburguesa: { nombre: 'Pan de hamburguesa', terminos: ['pan hamburguesa'], unidad: 'und', ref: 0.3, excluir: [] },
 
+  // ---------- desayunos y refacciones ----------
+  cafe: { nombre: 'Café molido', terminos: ['cafe molido', 'cafe'], unidad: 'g', ref: 1.2, excluir: ['instantane', 'capsula', 'leche', 'dulce', 'galleta', 'crema', 'helado', 'bebida', 'lata', 'frio', 'cold', 'listo para', 'mocca', 'capuchino'] },
+  avena: { nombre: 'Avena', terminos: ['avena'], unidad: 'g', ref: 0.35, excluir: [...SIN_PROCESADOS, 'barra', 'leche', 'jabon', 'shampoo', 'crema', 'mascarilla'] },
+  cereal: { nombre: 'Cereal', terminos: ['cereal', 'corn flakes', 'hojuelas maiz'], unidad: 'g', ref: 0.9, excluir: ['barra', 'bebe', 'infantil'] },
+  yogurt: { nombre: 'Yogurt', terminos: ['yogurt', 'yogur'], unidad: 'g', ref: 0.45, excluir: ['bebible', 'griego', 'congelado', 'helado', 'galleta', 'crema'] },
+  granola: { nombre: 'Granola', terminos: ['granola'], unidad: 'g', ref: 0.9, excluir: ['barra'] },
+  galletas: { nombre: 'Galletas', terminos: ['galleta'], unidad: 'g', ref: 0.6, excluir: ['perro', 'gato', 'mascota', 'bebe'] },
+  pan_dulce: { nombre: 'Pan dulce', terminos: ['pan dulce', 'semita', 'pan de yema'], unidad: 'und', ref: 0.35, excluir: [] },
+  pan_molde: { nombre: 'Pan de molde', terminos: ['pan blanco', 'pan sandwich', 'pan de molde', 'pan integral'], unidad: 'g', ref: 0.45, excluir: ['molido', 'hamburguesa', 'hot dog', 'dulce', 'frances', 'tostado', 'pita', 'arabe'] },
+  harina_panqueque: { nombre: 'Harina para panqueques', terminos: ['harina panqueque', 'mezcla panqueque', 'pancake'], unidad: 'g', ref: 0.45, excluir: ['miel', 'jarabe', 'sirope'] },
+  harina_arroz: { nombre: 'Harina de arroz', terminos: ['harina arroz'], unidad: 'g', ref: 0.35, excluir: [] },
+  jamon: { nombre: 'Jamón', terminos: ['jamon'], unidad: 'g', ref: 0.9, excluir: ['serrano', 'iberico', 'sabor'] },
+  queso_amarillo: { nombre: 'Queso amarillo (rodajas)', terminos: ['queso amarillo', 'queso americano', 'queso cheddar'], unidad: 'g', ref: 1.1, excluir: ['salsa', 'dip', 'snack', 'boquita', 'galleta', 'polvo'] },
+  chicharron: { nombre: 'Chicharrón', terminos: ['chicharron'], unidad: 'g', ref: 0.9, excluir: [...SIN_PROCESADOS, 'harina', 'bolsa'] },
+  fideos: { nombre: 'Fideos', terminos: ['fideo', 'cabello angel'], unidad: 'g', ref: 0.3, excluir: SIN_PROCESADOS },
+  tostadas: { nombre: 'Tostadas de maíz', terminos: ['tostada maiz', 'tostada'], unidad: 'und', ref: 0.08, excluir: ['pan tostado', 'harina', 'trigo', 'integral', 'nacho'] },
+  mani: { nombre: 'Maní', terminos: ['mani', 'cacahuate'], unidad: 'g', ref: 0.8, excluir: ['mantequilla', 'crema', 'dulce', 'chocolate', 'garapinado', 'confitado', 'aceite', 'galleta'] },
+  palomitas: { nombre: 'Maíz para palomitas', terminos: ['palomitas', 'maiz palomero', 'poporopo'], unidad: 'g', ref: 0.6, excluir: [] },
+  gelatina: { nombre: 'Gelatina', terminos: ['gelatina'], unidad: 'g', ref: 0.75, excluir: ['sin sabor', 'capsula', 'colageno', 'cabello'] },
+
+  // ---------- frutas ----------
+  platano: { nombre: 'Plátano', terminos: ['platano'], unidad: 'und', ref: 0.3, excluir: [...SIN_PROCESADOS, 'frito', 'harina', 'tajada', 'platanito'] },
+  banano: { nombre: 'Banano', terminos: ['banano', 'guineo'], unidad: 'und', ref: 0.12, excluir: [...SIN_PROCESADOS, 'deshidratad', 'chips', 'pan', 'yogurt', 'leche', 'jabon', 'shampoo', 'crema'] },
+  mango: { nombre: 'Mango', terminos: ['mango'], unidad: 'und', ref: 0.5, excluir: [...SIN_PROCESADOS, 'deshidratad', 'mermelada', 'yogurt', 'leche', 'jabon', 'crema', 'gelatina', 'salsa', 'nectar', 'pulpa'] },
+  manzana: { nombre: 'Manzana', terminos: ['manzana'], unidad: 'und', ref: 0.45, excluir: [...SIN_PROCESADOS, 'deshidratad', 'mermelada', 'yogurt', 'compota', 'vinagre', 'jabon', 'shampoo', 'crema', 'gelatina', 'sidra', 'te', 'pie'] },
+  naranja: { nombre: 'Naranja', terminos: ['naranja'], unidad: 'und', ref: 0.15, excluir: [...SIN_PROCESADOS, 'mermelada', 'yogurt', 'jabon', 'gelatina', 'nectar', 'te', 'aroma', 'pulpa'] },
+  papaya: { nombre: 'Papaya', terminos: ['papaya'], unidad: 'g', ref: 0.12, excluir: [...SIN_PROCESADOS, 'deshidratad', 'mermelada', 'jabon', 'crema'] },
+
   // ---------- se asume que hay en casa ----------
+  canela: { nombre: 'Canela', basico: true },
+  maicena: { nombre: 'Maicena', basico: true },
+  miel: { nombre: 'Miel o jarabe', basico: true },
+  alguashte: { nombre: 'Alguashte', basico: true },
+  vainilla: { nombre: 'Vainilla', basico: true },
   sal: { nombre: 'Sal', basico: true },
   pimienta: { nombre: 'Pimienta', basico: true },
   comino: { nombre: 'Comino', basico: true },
@@ -90,7 +123,8 @@ export function terminosDeIngredientes() {
 
 /** Para "lo que ya tengo": ingredientes comunes que suelen estar en la despensa. */
 export const DESPENSA_COMUN = ['arroz', 'frijol', 'aceite', 'huevo', 'tortillas', 'cebolla', 'tomate', 'papa', 'salsa_tomate',
-  'harina_maiz', 'espagueti', 'coditos', 'lentejas', 'queso_duro', 'crema', 'leche', 'margarina', 'limon', 'mayonesa'];
+  'harina_maiz', 'espagueti', 'coditos', 'lentejas', 'queso_duro', 'crema', 'leche', 'margarina', 'limon', 'mayonesa',
+  'cafe', 'avena', 'pan_molde', 'galletas', 'fideos'];
 
 /** Para "no me gusta": proteínas y algunas verduras que la gente suele evitar. */
 export const EVITABLES = [

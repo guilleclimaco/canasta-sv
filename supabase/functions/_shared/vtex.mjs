@@ -37,7 +37,7 @@ export function parsearContenido(nombre) {
   // Walmart/Maxi/Don Juan: "Tomate - 2 a 4 Unidades, precio Indicado Por Libra (454 g)" → el precio es por libra.
   // Solo cuenta un tamaño fijo de bolsa ("Red 5 Libras"), no "de 10 libras aproximadamente".
   if (/precio\s+(?:indicado\s+)?por\s+(?:libra|lb)\b/.test(n)) {
-    const bolsa = n.replace(/precio.*$/, '').match(/\b(\d+(?:\.\d+)?)\s*(?:libras|lbs|lb)\b(?!\s*aprox)/);
+    const bolsa = n.replace(/precio.*$/, '').replace(/\b\d+(?:\.\d+)?\s*(?:a|-)\s*\d+(?:\.\d+)?\s*(?:libras|lbs|lb)\b/g, ' ').match(/\b(\d+(?:\.\d+)?)\s*(?:libras|lbs|lb)\b(?!\s*aprox)/);
     return { contenido: bolsa ? Math.round(parseFloat(bolsa[1]) * 453.59 * 100) / 100 : 453.59, unidad: 'g' };
   }
   // "3 a 5 Unidades Aproximadamente" y "(1 Lb= 454 g)" son descripciones, no el tamaño
