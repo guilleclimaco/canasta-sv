@@ -4,7 +4,7 @@ import { INGREDIENTES, terminosDeIngredientes } from '../web/menu/ingredientes.j
 import { RECETAS } from '../web/menu/recetas.js';
 import {
   productoValido, preciosIngredientes, planificar, calcularCompras, costoReceta, cantidadTexto, PERFIL_INICIAL,
-  normalizarPerfil, slotsDe, presupuestoSugerido, recetasPosibles, claveSlot, PRESETS,
+  normalizarPerfil, slotsDe, presupuestoSugerido, recetasPosibles, claveSlot, PRESETS, adaptarReceta,
 } from '../web/menu/planificador.js';
 
 const prod = (over) => ({ id: Math.random(), tienda: 'maxi', precio_lista: null, ...over, busqueda: (over.nombre || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '') });
@@ -356,4 +356,19 @@ test('estructura salvadoreña: el almuerzo es el plato fuerte y la cena es livia
   const pupusasSabado = RECETAS.filter((r) => r.familia === 'pupusas' && r.tiempos.includes('cena')).length;
   assert.ok(pupusasSabado >= 10);
   assert.ok(receta('des-estrellados-tipico').tiempos.includes('cena'), 'el desayuno típico también es cena');
+});
+
+test('pupusas sin repollo: el curtido es opcional, la ensalada de repollo no', () => {
+  const perfil = { adultos: 2, evitar: ['repollo'], comidas: { cena: { dias: SEMANA } } };
+  const cenas = recetasPosibles(perfil, 'cena');
+  assert.ok(cenas.some((r) => r.familia === 'pupusas'), 'las pupusas siguen saliendo');
+  const p = adaptarReceta(receta('pupusas-chicharron'), perfil);
+  assert.equal(p.nombre, 'Pupusas de chicharrón');
+  assert.ok(!p.ing.some(([i]) => i === 'repollo'), 'sin repollo en las compras');
+  assert.ok(!p.pasos.some((x) => /curtido/i.test(x)), p.pasos.join(' | '));
+  assert.equal(adaptarReceta(receta('pupusas-chicharron'), { evitar: [] }).nombre, 'Pupusas de chicharrón con curtido');
+  // en el almuerzo, una ensalada de repollo sigue fuera
+  assert.ok(!recetasPosibles(perfil, 'almuerzo').some((r) => /ensalada de repollo/.test(r.nombre)));
+  const plan = planificar({ perfil: { ...perfil, comidas: { cena: { dias: SEMANA } } }, precios, semilla: 3 });
+  assert.ok(!plan.compras.some((c) => c.ingId === 'repollo'), 'no se compra repollo');
 });

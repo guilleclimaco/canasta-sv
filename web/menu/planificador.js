@@ -209,6 +209,35 @@ export function rangoPresupuesto(perfilEntrada) {
   return { min: p.presupuestoMin, max: p.presupuestoMax, sugerido: false };
 }
 
+/**
+ * La receta como la vas a cocinar: si algo que no te gusta es solo acompañamiento opcional (el curtido de las
+ * pupusas), se quita del nombre, los pasos y las compras; el plato queda igual.
+ */
+export function adaptarReceta(r, perfil) {
+  if (!r?.opcionales?.length || !perfil?.evitar?.length) return r;
+  const evitar = new Set(perfil.evitar);
+  if (!r.opcionales.some((id) => evitar.has(id))) return r;
+  const quitar = new Set(r.opcionales); // el curtido va completo o no va
+  return {
+    ...r,
+    nombre: r.nombre.replace(/,? con curtido( y salsa)?/i, (m, salsa) => (salsa ? ' con salsa' : '')).replace(/ y curtido$/i, '').trim(),
+    ing: r.ing.filter(([id]) => !quitar.has(id)),
+    pasos: r.pasos.map(sinCurtido).filter(Boolean),
+    sinCurtido: true,
+  };
+}
+
+/** Un paso de receta sin el curtido ("Sirve con curtido y salsa" → "Sirve con salsa"); null si el paso era solo el curtido */
+function sinCurtido(paso) {
+  const t = paso.trim();
+  if (/^curtido\b/i.test(t)) return null;
+  const conSalsa = /^prepara (el )?curtido[^.]*?(?:,| y) (una salsa[^.]*)\.?$/i.exec(t);
+  if (conSalsa) return `Prepara ${conSalsa[2]}.`;
+  if (/^prepara (el )?curtido/i.test(t)) return null;
+  return t.replace(/con curtido y /gi, 'con ').replace(/, curtido,/gi, ',').replace(/, curtido y /gi, ' y ')
+    .replace(/ curtido, /gi, ' ').replace(/ con curtido\.?$/i, '.');
+}
+
 /** Qué tan bien le cae una receta al perfil (sin contar el costo) */
 export function gusto(r, perfil) {
   const estilos = new Set(perfil.estilos || []);
@@ -235,7 +264,7 @@ export function recetasPosibles(perfilEntrada, tiempo = null, recetas = RECETAS,
     return (!tiempo || (r.tiempos || ['almuerzo']).includes(tiempo)) &&
       (r.aparatos || []).every((a) => aparatos.has(a) || a === 'licuadora') &&
       !evitar.has(r.proteina) &&
-      !r.ing.some(([id]) => evitar.has(id)) &&
+      !r.ing.some(([id]) => evitar.has(id) && !(r.opcionales || []).includes(id)) &&
       !etiquetas.some((e) => evitar.has(e)) &&
       !(evitar.has('picante') && etiquetas.includes('picante')) &&
       (!soloVeg || etiquetas.includes('vegetariano') || r.proteina === 'vegetal') &&
@@ -343,6 +372,7 @@ export function planificar({
   recetas = RECETAS, calificaciones = {}, sobras = {}, sinSobras = [], hoy = new Date(),
 }) {
   const perfil = normalizarPerfil(perfilEntrada);
+  recetas = recetas.map((r) => adaptarReceta(r, perfil)); // sin el curtido si no te gusta el repollo
   const desp = despensa instanceof Map ? despensa : normalizarDespensa(despensa);
   const slots = slotsDe(perfil);
   if (!slots.length) return { error: 'Elige al menos una comida y un día.', slots: [], compras: [], total: 0 };
@@ -443,6 +473,19 @@ export function planificar({
     }
   };
   const recetaEn = (dia, comida) => porId.get(elegido[claveSlot(dia, comida)]);
+  // Costumbres de la semana en El Salvador (premio, más alto = más acorde): pupusas el sábado en la noche;
+  // domingo, tamales o pupusas de desayuno y sopa o carne asada de almuerzo; entre semana el desayuno es rápido.
+  const costumbre = (s, r) => {
+    const t = TIEMPO[s.comida];
+    const fam = familia(r);
+    const finde = s.dia === 'sab' || s.dia === 'dom';
+    let c = 0;
+    if (s.comida === 'cena' && fam === 'pupusas') c += s.dia === 'sab' ? 3.5 : s.dia === 'vie' || s.dia === 'dom' ? 0.5 : -0.8;
+    if (s.dia === 'dom' && t === 'desayuno' && (fam === 'pupusas' || fam === 'tamales' || r.id === 'desayuno-tipico')) c += 1;
+    if (s.dia === 'dom' && t === 'almuerzo' && (fam === 'sopa' || /carne-asada|costilla|chumpe|pavo/.test(r.id))) c += 0.9;
+    if (!finde && t === 'desayuno' && (fam === 'pupusas' || fam === 'tamales')) c -= 1;
+    return c;
+  };
   const diaAnterior = (d) => SEMANA[SEMANA.indexOf(d) - 1];
   const ultimaDelDia = new Map();
   for (const s of slots) if (!enlaces[claveSlot(s.dia, s.comida)]) ultimaDelDia.set(s.dia, claveSlot(s.dia, s.comida));
@@ -506,13 +549,7 @@ export function planificar({
     if (t === 'desayuno' && !finDeSemana && r.minutos > 25) p += 0.8;
     if (t === 'desayuno') p += Math.max(0, (familias.get(familia(r)) || 0) - 1) * 1.5; // "huevos picados" 5 días, no
     if ((r.etiquetas || []).includes('finde')) p += finDeSemana ? -0.6 : 0.8; // carne asada, tamales: mejor el fin de semana
-    // costumbres de la semana: pupusas el sábado en la noche; domingo, tamales o pupusas de desayuno y sopa o
-    // carne asada de almuerzo; entre semana el desayuno es rápido (pupusas y tamales, mejor el fin de semana)
-    const fam = familia(r);
-    if (s.dia === 'sab' && s.comida === 'cena' && fam === 'pupusas') p -= 1.8;
-    if (s.dia === 'dom' && t === 'desayuno' && (fam === 'pupusas' || fam === 'tamales' || r.id === 'desayuno-tipico')) p -= 1;
-    if (s.dia === 'dom' && t === 'almuerzo' && (fam === 'sopa' || /carne-asada|costilla|chumpe|pavo/.test(r.id))) p -= 0.9;
-    if (!finDeSemana && t === 'desayuno' && (fam === 'pupusas' || fam === 'tamales')) p += 1;
+    p -= costumbre(s, r);
     // balance: que cada día tenga verdura o fruta
     if (!verduraDia.has(s.dia) && tieneVerdura(r)) p -= ultimaDelDia.get(s.dia) === claveSlot(s.dia, s.comida) ? 1.2 : 0.3;
     // usar primero lo que está por vencer
@@ -586,14 +623,14 @@ export function planificar({
       const k = claveSlot(sl.dia, sl.comida);
       if (fijos[k] || enlaces[k]) continue;
       const actual = porId.get(elegido[k]);
-      const gActual = gustoDe.get(actual.id) - repetido(k, actual);
+      const gActual = gustoDe.get(actual.id) - repetido(k, actual) + costumbre(sl, actual);
       for (const r of candidatosDe(sl)) {
         if (r.id === actual.id || (usadas.get(r.id) || 0) >= MAX_USOS[TIEMPO[sl.comida]]) continue;
         // el mismo plato fuerte con otros acompañamientos no entra dos veces en la semana
         if (r.familia && familia(r) !== familia(actual) && principal(k)
           && Object.entries(elegido).some(([k2, id]) => k2 !== k && !enlaces[k2] && principal(k2) && familia(porId.get(id)) === familia(r))) continue;
         const d = deltaCaja(actual, r, cocinar(sl));
-        const dG = gustoDe.get(r.id) - repetido(k, r) - gActual;
+        const dG = gustoDe.get(r.id) - repetido(k, r) + costumbre(sl, r) - gActual;
         let valor;
         if (arriba) {
           if (d > -0.01) continue;
@@ -619,10 +656,10 @@ export function planificar({
       const k = claveSlot(sl.dia, sl.comida);
       if (fijos[k] || enlaces[k]) continue;
       const actual = porId.get(elegido[k]);
-      const gActual = gustoDe.get(actual.id) - repetido(k, actual);
+      const gActual = gustoDe.get(actual.id) - repetido(k, actual) + costumbre(sl, actual);
       for (const r of candidatosDe(sl)) {
         if (r.id === actual.id || (usadas.get(r.id) || 0) >= MAX_USOS[TIEMPO[sl.comida]]) continue;
-        const dG = gustoDe.get(r.id) - repetido(k, r) - gActual;
+        const dG = gustoDe.get(r.id) - repetido(k, r) + costumbre(sl, r) - gActual;
         if (dG < 0.6) continue;
         const d = deltaCaja(actual, r, cocinar(sl));
         const nuevo = total + d;

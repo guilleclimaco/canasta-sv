@@ -8,7 +8,7 @@ import { INGREDIENTES, DESPENSA_COMUN, EVITABLES, terminosDeIngredientes, buscar
 import { RECETAS } from './menu/recetas.js';
 import {
   DIAS, COMIDAS, PRESETS, nombreComida, planificar, preciosIngredientes, cantidadTexto, ingredienteEnReceta, porcionesDe,
-  normalizarPerfil, slotsDe, presupuestoSugerido, rangoPresupuesto, recetasPosibles, costoReceta, claveSlot, MODOS_SOBRAS, esNoComida, gusto, productoValido,
+  normalizarPerfil, slotsDe, presupuestoSugerido, rangoPresupuesto, recetasPosibles, costoReceta, claveSlot, MODOS_SOBRAS, esNoComida, gusto, productoValido, adaptarReceta,
 } from './menu/planificador.js';
 import {
   cargarDespensa, despensaParaPlan, vistaDespensa, agregarDesdeItem, quitarDesdeItem, consumirReceta, restaurarConsumo, avisoEntro,
@@ -513,7 +513,10 @@ const CORTO = { desayuno: 'Desayuno', refaccion_am: 'Refacción AM', almuerzo: '
 const TIEMPO_DE = Object.fromEntries(COMIDAS.map(([id, , t]) => [id, t]));
 // recetario completo: el incluido + las recetas de la familia
 const todasRecetas = () => [...RECETAS, ...(estado.recetasPropias || [])];
-const recetaPorId = { get: (id) => todasRecetas().find((r) => r.id === id) || { id, nombre: 'Receta borrada', minutos: 0, etiquetas: [], ing: [], pasos: [], porciones: 4 } };
+const recetaPorId = { get: (id) => {
+  const r = todasRecetas().find((x) => x.id === id);
+  return r ? adaptarReceta(r, estado.menu?.perfil) : { id, nombre: 'Receta borrada', minutos: 0, etiquetas: [], ing: [], pasos: [], porciones: 4 };
+} };
 /** Opciones comunes para planificar: despensa viva, recetas propias, 👍/👎 y sobras */
 const opcionesPlan = () => ({
   despensa: despensaParaPlan(),
@@ -858,6 +861,7 @@ function hojaElegirReceta(slot) {
   const cacheBase = {};
   const base = (todas) => (cacheBase[todas] ||= (todas ? todasRecetas().filter((r) => (r.tiempos || ['almuerzo']).includes(tiempo)) : recetasPosibles(m.perfil, tiempo, todasRecetas(), slot.dia))
     .filter((r) => cal[r.id] !== -1)
+    .map((r) => adaptarReceta(r, m.perfil))
     .map((r) => ({ r, c: costoReceta(r, slot.porciones, m.precios, desp), g: gusto(r, m.perfil) + (cal[r.id] === 1 ? 1 : 0) })));
   const f = estado.filtroRecetas ||= { prot: 'todas', nivel: 'todos', rapidas: false, tipicas: false, saludables: false, sinFritos: false, lonchera: false, orden: 'populares', todas: false };
   f.nivel ||= 'todos';

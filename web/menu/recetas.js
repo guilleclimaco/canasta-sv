@@ -415,6 +415,9 @@ for (const r of RECETAS) {
   // dos pupusas, dos sopas o dos tamales en la semana cuentan como repetir plato
   const fam = /^(pupusas|sopa|tamales)/.exec(r.id);
   if (fam) r.familia = fam[1];
+  // pupusas y antojitos (yuca, enchiladas, pastelitos, tacos, tamales) se comen igual sin curtido: si no te gusta el
+  // repollo, el plato sigue saliendo sin el curtido. Una "ensalada de repollo" en un almuerzo sí es repollo.
+  if (!r.id.includes('--') && /curtido/i.test(`${r.nombre} ${r.pasos.join(' ')}`)) r.opcionales = ['repollo', 'zanahoria', 'vinagre', 'oregano'];
   if (FRITOS.includes(r.id) && !r.etiquetas.includes('frito')) r.etiquetas.push('frito');
   if (LONCHERA.has(r.id) && !r.etiquetas.includes('lonchera')) r.etiquetas.push('lonchera');
   // lo frito, las pupusas, los tacos y los ceviches no aguantan para comerse después
