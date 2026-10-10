@@ -266,6 +266,7 @@ Cada quien entra con su correo, que debe estar en `miembros`, y escribe el códi
 
 ## Mantenimiento
 
+- **Otro hogar** (alguien que vive aparte y quiere su propia lista, gastos y menú, con los mismos precios): `node scraper/agregar-miembro.mjs correo@x.com Nombre --hogar otro`. Sin `--hogar` la persona entra al hogar `casa` y comparte todo.
 - **Cambiaste algo en `web/`**: sube `VERSION` en `web/sw.js` para que los celulares bajen la versión nueva.
 - **Robot diario**: GitHub apaga los workflows programados tras 60 días sin actividad; el "latido mensual" del workflow lo evita.
 - **Una tienda cambió su página**: el workflow falla si no se pudo leer ninguna tienda VTEX. Corre `node scraper/probar.mjs arroz` para ver cuál.

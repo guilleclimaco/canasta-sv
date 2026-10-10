@@ -1,5 +1,6 @@
 // Agrega (o quita) a alguien del hogar. Así los correos NO quedan en el repo público.
 //   node scraper/agregar-miembro.mjs tucorreo@gmail.com Guille
+//   node scraper/agregar-miembro.mjs otro@gmail.com Nombre --hogar otro   (hogar aparte: su propia lista, gastos y menú)
 //   node scraper/agregar-miembro.mjs --quitar correo@gmail.com
 //   node scraper/agregar-miembro.mjs --ver
 import './supabase.mjs'; // carga scraper/.env
@@ -13,7 +14,10 @@ if (!URL_BASE || !KEY) {
 const h = { apikey: KEY, 'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates' };
 if (!KEY.startsWith('sb_')) h.Authorization = `Bearer ${KEY}`;
 
-const [a, b, ...resto] = process.argv.slice(2);
+const args = process.argv.slice(2);
+const iHogar = args.indexOf('--hogar');
+const hogar = iHogar >= 0 ? args.splice(iHogar, 2)[1] : 'casa';
+const [a, b, ...resto] = args;
 let res;
 if (a === '--ver') {
   res = await fetch(`${URL_BASE}/rest/v1/miembros?select=*`, { headers: h });
@@ -23,10 +27,10 @@ if (a === '--ver') {
   res = await fetch(`${URL_BASE}/rest/v1/miembros`, {
     method: 'POST',
     headers: h,
-    body: JSON.stringify({ email: a.toLowerCase(), nombre: [b, ...resto].filter(Boolean).join(' ') || null }),
+    body: JSON.stringify({ email: a.toLowerCase(), nombre: [b, ...resto].filter(Boolean).join(' ') || null, hogar }),
   });
 } else {
-  console.log('Uso: node scraper/agregar-miembro.mjs correo@x.com Nombre | --quitar correo | --ver');
+  console.log('Uso: node scraper/agregar-miembro.mjs correo@x.com Nombre [--hogar nombre] | --quitar correo | --ver');
   process.exit(1);
 }
 console.log(res.status, await res.text() || 'ok');
