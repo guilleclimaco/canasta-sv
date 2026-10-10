@@ -455,7 +455,7 @@ function planificarUnaVez({
       else {
         const pr = precios[id] || { precioUnit: precioRef(id) };
         const opts = [pr.producto, ...(pr.alternativas || [])].filter((x) => x?.contenido && x.precio)
-          .map((x) => [x.contenido, x.precio]); // todas: para poquito conviene el paquete chico
+          .map((x) => [x.contenido, x.precio, porPeso(x)]); // todas: para poquito conviene el paquete chico
         const hay = disponible(desp, id);
         f = { opts, unit: pr.precioUnit, und: ing.unidad === 'und', hay: Number.isFinite(hay) ? hay : Infinity };
       }
@@ -472,8 +472,8 @@ function planificarUnaVez({
     if (c <= 0) return 0;
     if (!f.opts.length) return c * f.unit;
     let m = Infinity;
-    for (const [cont, pr] of f.opts) {
-      const v = Math.max(1, Math.ceil(c / cont - 0.08)) * pr;
+    for (const [cont, pr, peso] of f.opts) {
+      const v = peso ? Math.max(0.5, Math.ceil((c / cont) * 4 - 0.08) / 4) * pr : Math.max(1, Math.ceil(c / cont - 0.08)) * pr;
       if (v < m) m = v;
     }
     return m;
@@ -711,6 +711,48 @@ function planificarUnaVez({
     for (const [k, id] of Object.entries(elegido)) if (!enlaces[k]) m.set(id, (m.get(id) || 0) + 1);
     return m;
   };
+  /**
+   * Movida grande, para cuando ningún cambio de UNA comida baja la caja (el paquete se compra igual por las demás):
+   * dejar de comprar un ingrediente en toda la semana, cambiando todas las comidas que lo usan por lo más barato
+   * que no lo lleve. Devuelve { valor, cambios, ahorro } sin aplicar nada.
+   */
+  const probarSinIngrediente = (id) => {
+    const usan = slots.filter((sl) => {
+      const k = claveSlot(sl.dia, sl.comida);
+      return !enlaces[k] && aportes(porId.get(elegido[k]), cocinar(sl)).some(([i]) => i === id);
+    });
+    if (!usan.length || usan.some((sl) => fijos[claveSlot(sl.dia, sl.comida)])) return null;
+    const antes = totalCaja();
+    const hechos = [];
+    let dG = 0;
+    const usadas = usosDe();
+    let ok = true;
+    for (const sl of usan) {
+      const k = claveSlot(sl.dia, sl.comida);
+      const actual = porId.get(elegido[k]);
+      const gActual = gustoDe.get(actual.id) - repetido(k, actual) + costumbre(sl, actual);
+      let mejor = null;
+      for (const r of candidatosDe(sl)) {
+        if (r.id === actual.id || (usadas.get(r.id) || 0) >= maxUsos[TIEMPO[sl.comida]]) continue;
+        if (aportes(r, cocinar(sl)).some(([i]) => i === id)) continue;
+        if (r.familia && familia(r) !== familia(actual) && principal(k) && otrasCon(k, 'fam', 'fam', familia(r)) >= 3) continue;
+        const d = deltaCaja(actual, r, cocinar(sl));
+        const g = gustoDe.get(r.id) - repetido(k, r) + costumbre(sl, r) - gActual;
+        const v = g - d * 3; // lo barato manda: se está apagando un incendio
+        if (!mejor || v > mejor.v) mejor = { r, v, g };
+      }
+      if (!mejor) { ok = false; break; }
+      hechos.push([k, actual]);
+      usadas.set(mejor.r.id, (usadas.get(mejor.r.id) || 0) + 1);
+      usadas.set(actual.id, (usadas.get(actual.id) || 1) - 1);
+      cambiar(k, mejor.r);
+      dG += mejor.g;
+    }
+    const ahorro = antes - totalCaja();
+    const cambios = hechos.map(([k]) => [k, porId.get(elegido[k])]);
+    hechos.reverse().forEach(([k, viejo]) => cambiar(k, viejo)); // deshacer: solo se estaba probando
+    return ok && ahorro > 0.02 ? { valor: dG / ahorro, cambios, ahorro } : null;
+  };
   let total = totalCaja();
   for (let i = 0; i < 120; i++) {
     const arriba = total > rango.max + 0.005;
@@ -742,6 +784,21 @@ function planificarUnaVez({
           valor = dG >= -0.5 ? 1000 + dG + Math.min(d, rango.min - total) * 0.3 : dG / d;
         }
         if (!mejor || valor > mejor.valor) mejor = { k, r, valor, d };
+      }
+    }
+    if (!mejor && arriba) {
+      // trabado arriba del máximo: probar dejar de comprar alguno de los ingredientes que más pesan en la caja
+      const caros = [...necesidad].filter(([, q]) => q > 0).map(([id, q]) => [id, cajaDe(id, q)])
+        .filter(([, c]) => c > 0).sort((a, b) => b[1] - a[1]).slice(0, 12);
+      let grupo = null;
+      for (const [id] of caros) {
+        const prueba = probarSinIngrediente(id);
+        if (prueba && (!grupo || prueba.valor > grupo.valor)) grupo = prueba;
+      }
+      if (grupo) {
+        grupo.cambios.forEach(([k, r]) => cambiar(k, r));
+        total = totalCaja();
+        continue;
       }
     }
     if (!mejor) break;
@@ -826,6 +883,21 @@ function armar(slots, elegido, enlaces, destinosDe, porId, costo, cocinar, preci
  * @param {Array<{receta, porciones}>} items
  */
 /** Lo que se paga en la caja por `cantTotal` de un ingrediente: paquetes enteros, descontando lo que hay en casa */
+/**
+ * Carne, hígado, verdura "precio indicado por libra": se vende al peso, se pide lo que hace falta (de ¼ en ¼ de libra,
+ * mínimo media libra), no la libra entera. Una bolsa de "2 libras" sí es paquete.
+ */
+export const porPeso = (p) => !!p && /precio indicado por|por (libra|lb)\b/i.test(p.nombre || '') && p.contenido > 440 && p.contenido < 470;
+/** Cuánto se compra de una presentación para cubrir `cant`: { n (paquetes, o libras si es al peso), total } */
+export function compraDe(p, cant) {
+  if (porPeso(p)) {
+    const n = Math.max(0.5, Math.ceil((cant / p.contenido) * 4 - 0.08) / 4);
+    return { n, total: n * p.precio };
+  }
+  const n = Math.max(1, Math.ceil(cant / p.contenido - 0.08)); // 8 % de tolerancia
+  return { n, total: n * p.precio };
+}
+
 export function costoCaja(id, cantTotal, precios, despensa = new Map()) {
   const ing = INGREDIENTES[id];
   if (!ing || ing.basico) return 0;
@@ -838,7 +910,7 @@ export function costoCaja(id, cantTotal, precios, despensa = new Map()) {
   const opciones = [pr.producto, ...(pr.alternativas || [])].filter((p) => p?.contenido && p.precio);
   if (!opciones.length) return cant * pr.precioUnit;
   let mejor = Infinity;
-  for (const p of opciones) mejor = Math.min(mejor, Math.max(1, Math.ceil(cant / p.contenido - 0.08)) * p.precio);
+  for (const p of opciones) mejor = Math.min(mejor, compraDe(p, cant).total);
   return mejor;
 }
 
@@ -870,8 +942,7 @@ export function calcularCompras(items, precios, despensa = new Map()) {
       const opciones = [producto, ...(pr.alternativas || [])].filter((p) => p?.contenido && p.precio);
       let mejor = null;
       for (const p of opciones) {
-        const n = Math.max(1, Math.ceil(cant / p.contenido - 0.08)); // 8 % de tolerancia
-        const tot = n * p.precio;
+        const { n, total: tot } = compraDe(p, cant);
         if (!mejor || tot < mejor.total - 0.005 || (Math.abs(tot - mejor.total) < 0.005 && p.precio / p.contenido < mejor.p.precio / mejor.p.contenido)) {
           mejor = { p, n, total: tot };
         }
@@ -883,7 +954,7 @@ export function calcularCompras(items, precios, despensa = new Map()) {
       costo = cant * pr.precioUnit;
     }
     out.push({
-      ingId: id, nombre: ing.nombre, necesita: r2(cant), unidad: ing.unidad, paquetes,
+      ingId: id, nombre: ing.nombre, necesita: r2(cant), unidad: ing.unidad, paquetes, alPeso: porPeso(producto),
       producto, alternativas: pr.alternativas || [], costo: r2(costo), estimado: !!pr.estimado,
       enCasa: Number.isFinite(disponible(desp, id)) && disponible(desp, id) > 0 ? r2(disponible(desp, id)) : 0,
     });

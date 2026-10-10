@@ -269,4 +269,27 @@ export const COMEDOR = [
       'Sirve la yuca con chicharrón, curtido, salsa y limón.',
     ],
   },
+  // lo más barato de la casa con carne: hígado con arroz y tortillas, sin más acompañamientos
+  {
+    id: 'higado-encebollado-arroz', nombre: 'Hígado encebollado con arroz', minutos: 30, porciones: 4, tiempos: ['almuerzo'],
+    aparatos: ['estufa'], etiquetas: ['tradicional', 'comedor', 'economico', 'visceras'], proteina: 'res', popularidad: 5,
+    ing: [['higado', 454], ['cebolla', 300], ['arroz', 300], ['tortillas', 12], ['ajo', 3], ['aceite', 40]],
+    pasos: [
+      'Lava el hígado en bistecs, sécalo y sazónalo con sal, pimienta y ajo.',
+      'Dóralo en sartén caliente con aceite, 2–3 min por lado (si se cocina de más queda duro). Retira.',
+      'En el mismo sartén cocina bastante cebolla en aros hasta que esté suave; regresa el hígado y tapa 3 min.',
+      'Sirve con arroz y tortillas.',
+    ],
+  },
+  {
+    id: 'higado-entomatado-arroz', nombre: 'Hígado entomatado con arroz', minutos: 35, porciones: 4, tiempos: ['almuerzo'],
+    aparatos: ['estufa'], etiquetas: ['tradicional', 'comedor', 'economico', 'visceras'], proteina: 'res', popularidad: 5,
+    ing: [['higado', 454], ['tomate', 400], ['cebolla', 150], ['chile_verde', 1], ['arroz', 300], ['tortillas', 12], ['ajo', 3], ['aceite', 40]],
+    pasos: [
+      'Corta el hígado en tiras y sazónalo con sal, pimienta y ajo.',
+      'Dóralo en sartén caliente con aceite. Retira.',
+      'Sofríe cebolla, chile verde y tomate picados hasta hacer salsa; regresa el hígado y cocina 5 min tapado.',
+      'Sirve con arroz y tortillas.',
+    ],
+  },
 ];

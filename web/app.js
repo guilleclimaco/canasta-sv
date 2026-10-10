@@ -570,6 +570,9 @@ async function cargarMenu() {
   estado.menuCargado = true;
 }
 
+/** 1.25 → "1¼ lb" */
+const libras = (n) => `${Math.floor(n) || ''}${({ 0.25: '¼', 0.5: '½', 0.75: '¾' })[n % 1] || ''} lb`.replace(/^ lb$/, '0 lb');
+
 /** Recalcula el menú guardado con los precios de hoy (mismas recetas, mismas comidas) */
 function planActual() {
   const m = estado.menu;
@@ -741,7 +744,7 @@ async function vistaMenu(v) {
         <div class="info">
           <div class="n">${esc(c.nombre)} <span class="unit">· necesitas ${esc(cantidadTexto(c.necesita, c.unidad))}${c.enCasa ? ` (ya tienes ${esc(cantidadTexto(c.enCasa, c.unidad))})` : ''}</span></div>
           <div class="sub">${c.producto
-            ? `${c.paquetes > 1 ? `${c.paquetes} × ` : ''}${esc(c.producto.nombre)} ${chip(c.producto.tienda)}`
+            ? `${c.alPeso ? `${libras(c.paquetes)} de ` : c.paquetes > 1 ? `${c.paquetes} × ` : ''}${esc(c.producto.nombre)} ${chip(c.producto.tienda)}`
             : '<span class="unit">precio estimado</span>'}${chipMercado(c)}</div>
         </div>
         <b class="precio">${dinero(c.costo)}</b>

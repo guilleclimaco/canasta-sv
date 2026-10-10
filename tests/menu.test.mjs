@@ -4,7 +4,7 @@ import { INGREDIENTES, terminosDeIngredientes } from '../web/menu/ingredientes.j
 import { RECETAS } from '../web/menu/recetas.js';
 import {
   productoValido, preciosIngredientes, planificar, calcularCompras, costoReceta, cantidadTexto, PERFIL_INICIAL,
-  normalizarPerfil, slotsDe, presupuestoSugerido, recetasPosibles, claveSlot, PRESETS, adaptarReceta,
+  normalizarPerfil, slotsDe, presupuestoSugerido, recetasPosibles, claveSlot, PRESETS, adaptarReceta, costoCaja, porPeso,
 } from '../web/menu/planificador.js';
 
 const prod = (over) => ({ id: Math.random(), tienda: 'maxi', precio_lista: null, ...over, busqueda: (over.nombre || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '') });
@@ -371,4 +371,25 @@ test('pupusas sin repollo: el curtido es opcional, la ensalada de repollo no', (
   assert.ok(!recetasPosibles(perfil, 'almuerzo').some((r) => /ensalada de repollo/.test(r.nombre)));
   const plan = planificar({ perfil: { ...perfil, comidas: { cena: { dias: SEMANA } } }, precios, semilla: 3 });
   assert.ok(!plan.compras.some((c) => c.ingId === 'repollo'), 'no se compra repollo');
+});
+
+test('pupusas, tamales, panes y rapiditas no son almuerzo; hay rapiditas y hígado con arroz', () => {
+  const antojitos = RECETAS.filter((r) => /^(pupusas|tamales|panes-con|rapiditas)/.test(r.id));
+  assert.ok(antojitos.length > 20);
+  assert.deepEqual(antojitos.filter((r) => r.tiempos.includes('almuerzo')).map((r) => r.id), []);
+  const rap = receta('rapiditas-frijol-queso');
+  assert.ok(rap && rap.tiempos.includes('cena') && rap.tiempos.includes('desayuno'));
+  const hig = receta('higado-encebollado-arroz');
+  assert.deepEqual(hig.tiempos, ['almuerzo']);
+  assert.equal(hig.nivel, 'barato');
+});
+
+test('al peso: la carne "precio indicado por libra" se paga por lo que se pide, no por libra entera', () => {
+  const higado = { nombre: 'Hígado Especial De Res - Precio Indicado por lb (454g)', contenido: 453.59, precio: 2, tienda: 'maxi' };
+  const bolsa = { nombre: 'Cebolla Blanca Red 2 Libras - precio Indicado Por Libra (454 g)', contenido: 907.18, precio: 2.5, tienda: 'maxi' };
+  assert.ok(porPeso(higado));
+  assert.ok(!porPeso(bolsa), 'una bolsa de 2 libras es paquete');
+  const pr = { higado: { precioUnit: 2 / 453.59, producto: higado, alternativas: [] } };
+  assert.equal(costoCaja('higado', 560, pr), 2.5); // 1¼ lb, no 2 libras
+  assert.equal(costoCaja('higado', 100, pr), 1); // mínimo media libra
 });

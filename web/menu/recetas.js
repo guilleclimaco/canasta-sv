@@ -412,6 +412,8 @@ for (const r of RECETAS) {
   if (COMEDOR.includes(r) && !['huevo', 'vegetal', 'embutido'].includes(r.proteina) && !/^(pupusas|tamales|pan-con|yuca)/.test(r.id)) {
     r.tiempos = r.tiempos.filter((t) => t !== 'cena');
   }
+  // las pupusas, los tamales, los panes y las rapiditas no son almuerzo: son cena, desayuno o refacción
+  if (/^(pupusas|tamales|panes-con|rapiditas)/.test(r.id)) r.tiempos = r.tiempos.filter((t) => t !== 'almuerzo');
   // dos pupusas, dos sopas o dos tamales en la semana cuentan como repetir plato
   const fam = /^(pupusas|sopa|tamales)/.exec(r.id);
   if (fam) r.familia = fam[1];
